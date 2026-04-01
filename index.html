@@ -198,12 +198,28 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="page-sub">貼入帳單文字自動解析，或手動新增單筆記錄</div>
       <div class="igrid">
         <div class="icard">
-          <h3>📋 貼入帳單文字</h3>
-          <p>每行一筆，包含日期和金額即可自動解析。支援支付寶、微信、信用卡格式。</p>
-          <textarea id="import-txt" rows="9" placeholder="範例：&#10;2026-04-01 餐飲 麥當勞 -19.90&#10;2026-04-01 話費 充值 -49.50&#10;&#10;或直接貼入帳單原文..."></textarea>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn" id="parse-btn">⚡ 解析文字</button>
-            <button class="btn btn-ghost" id="clear-btn">清除</button>
+          <h3>🤖 AI 智慧解析</h3>
+          <p>上傳支付寶／微信支付截圖，AI 直接識別所有交易；或切換到文字 tab 貼入帳單。</p>
+          <div style="display:flex;gap:4px;margin-bottom:14px;background:var(--s2);border-radius:10px;padding:4px">
+            <button id="tab-img" onclick="switchTab('img')" style="flex:1;padding:8px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;background:var(--gold);color:#080c14;font-family:'DM Sans',sans-serif">📷 截圖上傳</button>
+            <button id="tab-txt" onclick="switchTab('txt')" style="flex:1;padding:8px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--tx2);font-family:'DM Sans',sans-serif">📋 貼入文字</button>
+          </div>
+          <div id="panel-img">
+            <label for="img-input" style="display:block;width:100%;text-align:center;background:var(--s2);border:2px dashed var(--bd);color:var(--tx2);padding:24px 16px;border-radius:12px;cursor:pointer">
+              <div style="font-size:36px;margin-bottom:8px">📷</div>
+              <div style="font-weight:500;margin-bottom:4px">點擊上傳帳單截圖</div>
+              <div style="font-size:12px;color:var(--tx3)">支援 JPG、PNG，可一次選多張</div>
+            </label>
+            <input type="file" accept="image/*" multiple id="img-input" style="position:fixed;left:-9999px;top:-9999px;opacity:0" onchange="handleImageUpload(this)">
+            <div id="img-preview" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
+            <button class="btn" id="parse-img-btn" onclick="parseImages()" style="display:none;margin-top:12px;width:100%;padding:14px;font-size:15px">🔍 AI 識別截圖</button>
+          </div>
+          <div id="panel-txt" style="display:none">
+            <textarea id="import-txt" rows="8" placeholder="範例：&#10;2026-04-01 麥當勞 -19.90&#10;2026-04-01 話費充值 -49.50&#10;&#10;或直接貼入帳單原文..."></textarea>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="parse-btn">⚡ 解析文字</button>
+              <button class="btn btn-ghost" id="clear-btn">清除</button>
+            </div>
           </div>
           <div id="ai-res"></div>
         </div>
@@ -255,7 +271,8 @@ const INIT_TWD = 692704+443068+201080+21620+1000+Math.round(968*4.45);
 
 let FX={CNY:{"201807":4.52,"201901":4.38,"201902":4.37,"201903":4.42,"201904":4.45,"201905":4.38,"201906":4.31,"201907":4.30,"201908":4.25,"201909":4.24,"201910":4.26,"201911":4.30,"201912":4.30,"202001":4.27,"202002":4.24,"202005":4.17,"202006":4.21,"202007":4.19,"202008":4.19,"202009":4.25,"202010":4.32,"202012":4.38,"202101":4.39,"202102":4.43,"202103":4.45,"202104":4.48,"202105":4.45,"202106":4.50,"202107":4.48,"202108":4.46,"202205":4.24,"202208":4.17,"202211":4.09,"202303":4.28,"202304":4.26,"202305":4.24,"202306":4.24,"202307":4.25,"202308":4.19,"202309":4.19,"202310":4.21,"202311":4.23,"202312":4.23,"202401":4.30,"202402":4.33,"202403":4.38,"202404":4.41,"202405":4.38,"202406":4.37,"202407":4.37,"202408":4.29,"202409":4.33,"202410":4.40,"202411":4.38,"202412":4.42,"202501":4.43,"202502":4.40,"202503":4.38,"202504":4.19,"202505":4.04,"202506":4.12,"202507":4.05,"202508":4.12,"202509":4.21,"202510":4.28,"202511":4.32,"202512":4.35,"202601":4.37,"202602":4.38,"202603":4.39},HKD:{"201901":3.87,"201902":3.87,"201903":3.86,"201904":3.86,"201905":3.85,"201906":3.85,"201907":3.85,"201908":3.85,"201909":3.85,"201910":3.85,"201911":3.84,"201912":3.85,"202001":3.86,"202002":3.86,"202007":3.86,"202008":3.85,"202009":3.84,"202010":3.84,"202101":3.84,"202102":3.86,"202103":3.86,"202105":3.87,"202106":3.87,"202107":3.86,"202108":3.86,"202204":3.81,"202211":3.88,"202212":3.87,"202301":3.87,"202308":3.84},KRW:{"202211":0.0228,"202312":0.0231},JPY:{"202303":0.225,"202312":0.215,"202405":0.198},USD:{"202202":27.9,"202203":28.3,"202401":31.8,"202411":32.5},GBP:{"202111":37.8}};
 
-let BASE_DATA=[]; // loaded from localStorage
+let BASE_DATA=[];
+let uploadedImages=[]; // loaded from localStorage
 let newRec=[],allData=[],filtered=[],dispN=60,ovY="all",mthY=String(new Date().getFullYear()),ch={};
 
 function toTWD(r){if(!r.cur)return r.a;const tbl=FX[r.cur];if(!tbl)return r.a;const ym=r.d.substring(0,6);if(tbl[ym])return r.a*tbl[ym];const av=Object.keys(tbl).sort(),past=av.filter(m=>m<=ym);return r.a*(past.length?tbl[past[past.length-1]]:tbl[av[0]]||1);}
@@ -653,9 +670,96 @@ function renderFX(){
 function updateFX(input){const val=parseFloat(input.value);if(!isNaN(val)&&val>0)FX[input.dataset.cur][input.dataset.ym]=val;}
 function applyFX(){toast("✓ 匯率已更新","green");setTimeout(()=>{if($("page-overview").classList.contains("active"))renderOv();else if($("page-monthly").classList.contains("active"))renderMth();else if($("page-records").classList.contains("active"))renderList();},100);}
 
+
+// ── IMAGE UPLOAD ──
+window.handleImageUpload = function(input) {
+  const files = Array.from(input.files);
+  const preview = document.getElementById("img-preview");
+  const parseBtn = document.getElementById("parse-img-btn");
+  uploadedImages = [];
+  if(preview) preview.innerHTML = "";
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const imgEl = new Image();
+      imgEl.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 1024; let w = imgEl.width, h = imgEl.height;
+        if(w > MAX || h > MAX){ if(w > h){h = Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(imgEl, 0, 0, w, h);
+        const comp = canvas.toDataURL("image/jpeg", 0.75);
+        uploadedImages.push({base64: comp.split(",")[1], type: "image/jpeg"});
+        if(preview){
+          const th = document.createElement("img");
+          th.src = comp;
+          th.style.cssText = "width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--bd)";
+          preview.appendChild(th);
+        }
+        if(uploadedImages.length === files.length && parseBtn) parseBtn.style.display = "block";
+      };
+      imgEl.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+window.parseImages = async function() {
+  if(!uploadedImages.length){ toast("請先上傳圖片", "red"); return; }
+  const btn = document.getElementById("parse-img-btn");
+  const res = document.getElementById("ai-res");
+  if(btn){ btn.disabled = true; btn.innerHTML = "<span class='spinner'></span>AI 識別中..."; }
+  if(res) res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>🤖 正在識別截圖...</div>";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const prompt = "你是財務記帳助理。提取圖片中每筆交易。只回覆JSON陣列，不要說明文字。\n格式：[{\"date\":\"YYYY-MM-DD\",\"amount\":數字,\"currency\":\"CNY或TWD\",\"type\":\"expense或income\",\"category\":\"餐飲食品/運輸交通/休閒娛樂/服飾美容/居家生活/投資收入/人情交際/一般收入/3C通訊/教育學習/醫療保健/其他\",\"subcategory\":\"子類別\",\"note\":\"商家或備註\"}]\n今天：" + today + "，昨天等相對日期請換算成實際日期，月/日格式請補上年份。";
+
+  const content = [
+    ...uploadedImages.map(img => ({type:"image", source:{type:"base64", media_type:img.type, data:img.base64}})),
+    {type:"text", text:prompt}
+  ];
+
+  const fetchP = fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:1500, messages:[{role:"user", content}]})
+  });
+  const timeoutP = new Promise((_,rej) => setTimeout(() => rej(new Error("請求超時，請重試")), 60000));
+
+  try {
+    const resp = await Promise.race([fetchP, timeoutP]);
+    const data = await resp.json();
+    if(!resp.ok || data.error) throw new Error(data.error && data.error.message ? data.error.message : "HTTP " + resp.status);
+    const raw = data.content[0].text.replace(/\x60\x60\x60json|\x60\x60\x60/g, "").trim();
+    const parsed = JSON.parse(raw);
+    showParsedResult(parsed);
+    // Clear images after success
+    uploadedImages = [];
+    const pp = document.getElementById("img-preview"); if(pp) pp.innerHTML = "";
+    if(btn) btn.style.display = "none";
+  } catch(e) {
+    if(res) res.innerHTML = "<div style='color:var(--red);font-size:12px;padding:10px'>❌ " + e.message + "</div>";
+  } finally {
+    if(btn){ btn.disabled = false; btn.innerHTML = "🔍 AI 識別截圖"; }
+  }
+};
+
 document.addEventListener("DOMContentLoaded",init);
 })();
 
+</script>
+
+<script>
+function switchTab(tab) {
+  const isImg = tab === "img";
+  const ti = document.getElementById("tab-img"), tt = document.getElementById("tab-txt");
+  const pi = document.getElementById("panel-img"), pt = document.getElementById("panel-txt");
+  if(ti){ti.style.background=isImg?"var(--gold)":"transparent";ti.style.color=isImg?"#080c14":"var(--tx2)";ti.style.fontWeight=isImg?"600":"500";}
+  if(tt){tt.style.background=isImg?"transparent":"var(--gold)";tt.style.color=isImg?"var(--tx2)":"#080c14";tt.style.fontWeight=isImg?"500":"600";}
+  if(pi)pi.style.display=isImg?"block":"none";
+  if(pt)pt.style.display=isImg?"none":"block";
+}
 </script>
 </body>
 </html>
