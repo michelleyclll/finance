@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#080c14">
 <title>智慧記帳</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#080c14;--s1:#0f1520;--s2:#161e2e;--s3:#1c2538;--bd:rgba(255,255,255,0.07);--gold:#f0c060;--gold2:#e8a820;--teal:#4ecdc4;--red:#ff6b6b;--green:#51cf66;--tx:#e8eaf0;--tx2:#8892a4;--tx3:#4a5568;--r:14px}
@@ -205,14 +206,30 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
             <button id="tab-txt" onclick="switchTab('txt')" style="flex:1;padding:8px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--tx2);font-family:'DM Sans',sans-serif">📋 貼入文字</button>
           </div>
           <div id="panel-img">
+            <div id="ocr-mode-bar" style="display:flex;align-items:center;justify-content:space-between;background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+              <div>
+                <span id="ocr-mode-label" style="color:var(--teal)">🔓 免費 OCR 模式</span>
+                <span style="color:var(--tx3);margin-left:6px">瀏覽器內辨識，無需 API key</span>
+              </div>
+              <button onclick="toggleApiKeyPanel()" style="background:transparent;border:1px solid var(--bd);color:var(--tx2);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">⚙️ 切換</button>
+            </div>
+            <div id="api-key-panel" style="display:none;background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px">
+              <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--tx)">🔑 高精度 AI 模式（可選）</div>
+              <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;line-height:1.6">輸入 Anthropic API Key 啟用 Claude Vision 識別，準確率更高。<br>Key 僅存於本機，不會上傳至第三方。</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;background:var(--s1);border:1px solid var(--bd);color:var(--tx);padding:8px 10px;border-radius:8px;font-size:12px;font-family:'DM Mono',monospace;outline:none">
+                <button onclick="saveApiKey()" class="btn" style="padding:8px 14px;font-size:12px">儲存</button>
+                <button onclick="clearApiKey()" class="btn btn-ghost" style="padding:8px 10px;font-size:11px">清除</button>
+              </div>
+            </div>
             <label for="img-input" style="display:block;width:100%;text-align:center;background:var(--s2);border:2px dashed var(--bd);color:var(--tx2);padding:24px 16px;border-radius:12px;cursor:pointer">
               <div style="font-size:36px;margin-bottom:8px">📷</div>
               <div style="font-weight:500;margin-bottom:4px">點擊上傳帳單截圖</div>
-              <div style="font-size:12px;color:var(--tx3)">支援 JPG、PNG，可一次選多張</div>
+              <div style="font-size:12px;color:var(--tx3)">支援微信、支付寶、銀行帳單截圖（JPG/PNG，可多張）</div>
             </label>
             <input type="file" accept="image/*" multiple id="img-input" style="position:fixed;left:-9999px;top:-9999px;opacity:0" onchange="handleImageUpload(this)">
             <div id="img-preview" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
-            <button class="btn" id="parse-img-btn" onclick="parseImages()" style="display:none;margin-top:12px;width:100%;padding:14px;font-size:15px">🔍 AI 識別截圖</button>
+            <button class="btn" id="parse-img-btn" onclick="parseImages()" style="display:none;margin-top:12px;width:100%;padding:14px;font-size:15px">🔍 識別截圖</button>
           </div>
           <div id="panel-txt" style="display:none">
             <textarea id="import-txt" rows="8" placeholder="範例：&#10;2026-04-01 麥當勞 -19.90&#10;2026-04-01 話費充值 -49.50&#10;&#10;或直接貼入帳單原文..."></textarea>
@@ -328,52 +345,57 @@ function init(){
 }
 
 function showWelcome(){
-  const main=$("page-overview");
-  if(!main)return;
-  main.classList.add("active");
-  document.querySelector('.nav-item[data-page="overview"]').classList.add("active");
-  main.innerHTML='<div style="max-width:500px;margin:80px auto;text-align:center">'
-    +'<div style="font-size:48px;margin-bottom:20px">✦</div>'
-    +'<div style="font-size:22px;font-weight:600;margin-bottom:8px">歡迎使用智慧記帳</div>'
-    +'<div style="color:var(--tx2);font-size:14px;margin-bottom:32px;line-height:1.7">首次使用請匯入你的歷史資料<br>（my_finance_data.json）</div>'
-    +'<label class="btn" style="cursor:pointer;font-size:15px;padding:14px 28px;display:inline-block">'
-    +'📂 匯入歷史資料 JSON'
-    +'<input type="file" accept=".json" onchange="loadBaseData(this)" style="display:none">'
-    +'</label>'
-    +'<div style="margin-top:20px;color:var(--tx3);font-size:12px">或直接點左邊選單開始手動記帳</div>'
-    +'<button class="btn btn-ghost" style="margin-top:12px" onclick="skipImport()">略過，直接使用</button>'
-    +'</div>';
+  // Use overlay instead of destroying page HTML
+  var old=document.getElementById("welcome-overlay");
+  if(old)old.remove();
+
+  var overlay=document.createElement("div");
+  overlay.id="welcome-overlay";
+  overlay.style.cssText="position:fixed;inset:0;background:var(--bg);z-index:150;display:flex;align-items:center;justify-content:center;padding:20px";
+
+  var wrapper=document.createElement("div");
+  wrapper.style.cssText="max-width:500px;text-align:center";
+
+  var icon=document.createElement("div");
+  icon.style.cssText="font-size:48px;margin-bottom:20px";
+  icon.textContent="✦";
+
+  var title=document.createElement("div");
+  title.style.cssText="font-size:22px;font-weight:600;margin-bottom:8px;color:var(--tx)";
+  title.textContent="歡迎使用智慧記帳";
+
+  var sub=document.createElement("div");
+  sub.style.cssText="color:var(--tx2);font-size:14px;margin-bottom:32px;line-height:1.7";
+  sub.textContent="首次使用請匯入你的歷史資料（my_finance_data.json）";
+
+  var label=document.createElement("label");
+  label.style.cssText="background:var(--gold);color:#080c14;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;display:inline-block";
+  label.textContent="📂 匯入歷史資料 JSON";
+  var fileInput=document.createElement("input");
+  fileInput.type="file";fileInput.accept=".json";
+  fileInput.style.display="none";
+  fileInput.addEventListener("change",function(){window.loadBaseData(fileInput);});
+  label.appendChild(fileInput);
+
+  var or2=document.createElement("div");
+  or2.style.cssText="margin-top:20px;color:var(--tx3);font-size:12px";
+  or2.textContent="或直接點左邊選單開始手動記帳";
+
+  var skipBtn=document.createElement("button");
+  skipBtn.className="btn btn-ghost";
+  skipBtn.style.cssText="margin-top:12px;display:block;margin-left:auto;margin-right:auto";
+  skipBtn.textContent="略過，直接使用";
+  skipBtn.addEventListener("click",function(){window.skipImport();});
+
+  wrapper.appendChild(icon);wrapper.appendChild(title);wrapper.appendChild(sub);
+  wrapper.appendChild(label);wrapper.appendChild(or2);wrapper.appendChild(skipBtn);
+  overlay.appendChild(wrapper);
+  document.body.appendChild(overlay);
 }
 
-window.loadBaseData=function(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const payload=JSON.parse(e.target.result);
-      const records=payload.records||payload;
-      if(!Array.isArray(records))throw new Error("格式錯誤");
-      BASE_DATA=records;
-      saveBase();
-      rebuildAllData();
-      initUI();
-      toast("✓ 已載入 "+BASE_DATA.length+" 筆歷史資料","green");
-    }catch(err){toast("❌ 匯入失敗："+err.message,"red");}
-    input.value="";
-  };
-  reader.readAsText(file);
-};
-
-window.skipImport=function(){
-  BASE_DATA=[];saveBase();initUI();
-};
 
 function initUI(){
-  // Rebuild overview page content if it was replaced by welcome screen
-  const ov=$("page-overview");
-  if(ov&&ov.innerHTML.includes("歡迎使用")){
-    location.reload();return;
-  }
+
 
   const years=[...new Set(allData.map(r=>yr(r.d)))].sort();
   const ovEl=$("ov-years");if(ovEl){ovEl.innerHTML="";mkYrBtn("全部","all",true,ovEl,v=>{ovY=v;renderOv();});years.forEach(y=>mkYrBtn(y,y,false,ovEl,v=>{ovY=v;renderOv();}));}
@@ -384,6 +406,7 @@ function initUI(){
   [["s-q","input",renderRec],["s-type","change",renderRec],["s-cat","change",renderRec],["s-year","change",renderRec],["s-month","change",renderRec],["load-more","click",()=>{dispN+=60;renderList();}],["btn-add","click",()=>showPage("import")],["parse-btn","click",parseText],["clear-btn","click",()=>{const t=$("import-txt");if(t)t.value="";}],["q-add-btn","click",quickAdd],["q-type","change",updateQCats],["q-cat","change",updateQSubs]].forEach(([id,ev,fn])=>{const el=$(id);if(el)el.addEventListener(ev,fn);});
   document.querySelectorAll(".nav-item[data-page]").forEach(el=>el.addEventListener("click",()=>showPage(el.dataset.page)));
   renderOv();
+  updateOcrModeLabel();
 }
 
 function getByY(y){return y==="all"?allData:allData.filter(r=>yr(r.d)===y);}
@@ -396,16 +419,16 @@ function renderOv(){
   setEl("c-inc",fa(totI));setEl("c-inc-n",inc.length.toLocaleString()+" 筆");
   setEl("c-exp",fa(totE));setEl("c-exp-n",exp.length.toLocaleString()+" 筆");
   setEl("c-net",fa(net),net>=0?"var(--teal)":"var(--red)");
-  setEl("c-init-twd",fa(INIT_TWD));
   setEl("c-mon",fa(monE));setEl("c-mon-l",now.getFullYear()+"年"+(now.getMonth()+1)+"月");
   setEl("c-est",fa(est),est>=0?"var(--teal)":"var(--red)");
+  setEl("c-init-twd",fa(INIT_TWD),"var(--tx2)");
   setEl("c-net-disp",(net>=0?"+":"")+fa(net),net>=0?"var(--teal)":"var(--red)");
   const sd=allData.map(r=>r.d).sort();
   if(sd.length)setEl("ov-sub",fd(sd[0])+" — "+fd(sd[sd.length-1])+" · "+allData.length.toLocaleString()+" 筆記錄");
 
   const mmap={};exp.forEach(r=>{const k=yr(r.d)+"/"+mo(r.d);mmap[k]=(mmap[k]||0)+toTWD(r);});
   const mk=Object.keys(mmap).sort().slice(-24);
-  dc("mly");ch["mly"]=new Chart($("ch-mly"),{type:"bar",data:{labels:mk,datasets:[{data:mk.map(k=>Math.round(mmap[k])),backgroundColor:"rgba(240,192,96,0.7)",borderColor:"#f0c060",borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"NT$ "+c.raw.toLocaleString()}}},scales:{x:{ticks:{color:"#4a5568",font:{size:9}},grid:{color:"rgba(255,255,255,0.04)"}},y:{ticks:{color:"#4a5568",font:{size:9},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,0.04)"}}}}});
+  dc("mly");if(!$("ch-mly"))return;ch["mly"]=new Chart($("ch-mly"),{type:"bar",data:{labels:mk,datasets:[{data:mk.map(k=>Math.round(mmap[k])),backgroundColor:"rgba(240,192,96,0.7)",borderColor:"#f0c060",borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"NT$ "+c.raw.toLocaleString()}}},scales:{x:{ticks:{color:"#4a5568",font:{size:9}},grid:{color:"rgba(255,255,255,0.04)"}},y:{ticks:{color:"#4a5568",font:{size:9},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,0.04)"}}}}});
   const cmap={};exp.forEach(r=>{cmap[r.c]=(cmap[r.c]||0)+toTWD(r);});
   const ctop=Object.entries(cmap).sort((a,b)=>b[1]-a[1]).slice(0,8);
   dc("cat");ch["cat"]=new Chart($("ch-cat"),{type:"doughnut",data:{labels:ctop.map(([k])=>k),datasets:[{data:ctop.map(([,v])=>Math.round(v)),backgroundColor:ctop.map(([k])=>CC[k]||"#64748b"),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",onClick:(e,els)=>{if(els.length)showCatDrill(ctop[els[0].index][0],getByY(ovY));},plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10},onClick:(e,item)=>showCatDrill(item.text,getByY(ovY))},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()+" (點擊細項)"}}}}});
@@ -635,12 +658,12 @@ window.openEdit=function(idx){
   const newIdx=newRec.findIndex(n=>n.d===r.d&&n.a===r.a&&n.c===r.c&&n.t===r.t&&(n.n||"")===(r.n||""));const isNew=newIdx>=0;
   const emc=$("edit-modal-content");if(!emc)return;
   const curs=["TWD","CNY","HKD","USD","JPY","KRW","EUR","SGD","AUD","THB","GBP"];
-  emc.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:20px'><div><div style='font-size:16px;font-weight:600'>"+(isNew?"編輯記錄":"檢視記錄")+"</div><div style='font-size:11px;color:var(--tx3);margin-top:2px'>"+(isNew?"":"原始資料，可建立更正記錄")+"</div></div><button onclick=\"$('edit-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
+  emc.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:20px'><div><div style='font-size:16px;font-weight:600'>"+(isNew?"編輯記錄":"檢視記錄")+"</div><div style='font-size:11px;color:var(--tx3);margin-top:2px'>"+(isNew?"":"原始資料，可建立更正記錄")+"</div></div><button onclick=\"document.getElementById('edit-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
     +"<div class='frow'><div class='fg'><label>日期</label><input type='date' id='ed-date' value='"+fd(r.d)+"'></div><div class='fg'><label>金額</label><input type='number' id='ed-amt' value='"+r.a+"' step='0.01'></div></div>"
     +"<div class='frow'><div class='fg'><label>幣別</label><select id='ed-cur'>"+curs.map(c=>"<option value='"+c+"'"+((r.cur||"TWD")===c?" selected":"")+">"+c+"</option>").join("")+"</select></div><div class='fg'><label>類型</label><select id='ed-type'><option value='e'"+(r.t==="e"?" selected":"")+">支出</option><option value='i'"+(r.t==="i"?" selected":"")+">收入</option><option value='x'"+(r.t==="x"?" selected":"")+">轉帳</option></select></div></div>"
     +"<div class='frow'><div class='fg'><label>類別</label><select id='ed-cat'>"+[...new Set(allData.map(x=>x.c))].sort().map(c=>"<option value='"+c+"'"+(r.c===c?" selected":"")+">"+c+"</option>").join("")+"</select></div><div class='fg'><label>子類別</label><input type='text' id='ed-sub' value='"+(r.s||"")+"'></div></div>"
     +"<div class='fg' style='margin-bottom:16px'><label>備註</label><input type='text' id='ed-note' value='"+(r.n||r.m||"")+"'></div>"
-    +"<div style='display:flex;gap:8px'><button class='btn' onclick='saveEdit("+newIdx+")'>"+(isNew?"✓ 儲存":"✓ 建立更正")+"</button>"+(isNew?"<button class='btn' style='background:var(--red);color:#fff' onclick='deleteRec("+newIdx+")'>刪除</button>":"")+"<button class='btn btn-ghost' onclick=\"$('edit-modal').style.display='none'\">取消</button></div>";
+    +"<div style='display:flex;gap:8px'><button class='btn' onclick='saveEdit("+newIdx+")'>"+(isNew?"✓ 儲存":"✓ 建立更正")+"</button>"+(isNew?"<button class='btn' style='background:var(--red);color:#fff' onclick='deleteRec("+newIdx+")'>刪除</button>":"")+"<button class='btn btn-ghost' onclick=\"document.getElementById('edit-modal').style.display='none'\">取消</button></div>";
   const em=$("edit-modal");if(em)em.style.display="flex";
 };
 window.saveEdit=function(newIdx){
@@ -657,7 +680,7 @@ window.showCatDrill=function(cat,data){
   const exp=data.filter(r=>r.t==="e"&&r.c===cat),smap={};exp.forEach(r=>{const k=r.s||"（無子分類）";smap[k]=(smap[k]||0)+toTWD(r);});
   const sorted=Object.entries(smap).sort((a,b)=>b[1]-a[1]),total=sorted.reduce((s,[,v])=>s+v,0),maxV=sorted[0]?sorted[0][1]:1,col=CC[cat]||"#64748b";
   const dc2=$("drill-content");if(!dc2)return;
-  dc2.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:18px'><div><div style='font-size:17px;font-weight:600'>"+cat+"</div><div style='font-size:12px;color:var(--tx3);margin-top:3px'>共 "+exp.length+" 筆 · 合計 NT$ "+Math.round(total).toLocaleString()+"</div></div><button onclick=\"$('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
+  dc2.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:18px'><div><div style='font-size:17px;font-weight:600'>"+cat+"</div><div style='font-size:12px;color:var(--tx3);margin-top:3px'>共 "+exp.length+" 筆 · 合計 NT$ "+Math.round(total).toLocaleString()+"</div></div><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
     +sorted.map(([sub,val])=>{const pct=Math.round(val/maxV*100),ratio=Math.round(val/total*100);return "<div style='margin-bottom:14px;cursor:pointer' onclick='drillToRecords(\""+cat+"\",\""+sub+"\")'><div style='display:flex;justify-content:space-between;margin-bottom:5px'><span style='font-size:13px'>"+sub+"</span><span style='font-size:12px;font-family:DM Mono,monospace;color:var(--tx2)'>NT$ "+Math.round(val).toLocaleString()+" <span style='color:var(--tx3)'>"+ratio+"%</span></span></div><div style='height:6px;background:var(--s3);border-radius:3px;overflow:hidden'><div style='width:"+pct+"%;height:100%;background:"+col+";border-radius:3px'></div></div></div>";}).join("")
     +"<div style='margin-top:18px;padding-top:14px;border-top:1px solid var(--bd);font-size:12px;color:var(--tx3)'>點擊子分類跳至明細記錄</div>";
   const dm=$("drill-modal");if(dm)dm.style.display="flex";
@@ -712,40 +735,363 @@ window.parseImages = async function() {
   if(!uploadedImages.length){ toast("請先上傳圖片", "red"); return; }
   const btn = document.getElementById("parse-img-btn");
   const res = document.getElementById("ai-res");
-  if(btn){ btn.disabled = true; btn.innerHTML = "<span class='spinner'></span>AI 識別中..."; }
-  if(res) res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>🤖 正在識別截圖...</div>";
 
-  const today = new Date().toISOString().slice(0, 10);
-  const prompt = "你是財務記帳助理。提取圖片中每筆交易。只回覆JSON陣列，不要說明文字。\n格式：[{\"date\":\"YYYY-MM-DD\",\"amount\":數字,\"currency\":\"CNY或TWD\",\"type\":\"expense或income\",\"category\":\"餐飲食品/運輸交通/休閒娛樂/服飾美容/居家生活/投資收入/人情交際/一般收入/3C通訊/教育學習/醫療保健/其他\",\"subcategory\":\"子類別\",\"note\":\"商家或備註\"}]\n今天：" + today + "，昨天等相對日期請換算成實際日期，月/日格式請補上年份。";
+  const apiKey = getApiKey();
 
-  const content = [
-    ...uploadedImages.map(img => ({type:"image", source:{type:"base64", media_type:img.type, data:img.base64}})),
-    {type:"text", text:prompt}
-  ];
+  if(apiKey) {
+    // ── AI MODE: Claude Vision API ──
+    if(btn){ btn.disabled = true; btn.innerHTML = "<span class='spinner'></span>AI 識別中..."; }
+    if(res) res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>🤖 Claude Vision 識別中...</div>";
 
-  const fetchP = fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:1500, messages:[{role:"user", content}]})
-  });
-  const timeoutP = new Promise((_,rej) => setTimeout(() => rej(new Error("請求超時，請重試")), 60000));
+    const today = new Date().toISOString().slice(0, 10);
+    const prompt = "你是財務記帳助理。提取圖片中每筆交易。只回覆JSON陣列，不要說明文字。\n格式：[{\"date\":\"YYYY-MM-DD\",\"amount\":數字,\"currency\":\"CNY或TWD\",\"type\":\"expense或income\",\"category\":\"餐飲食品/運輸交通/休閒娛樂/服飾美容/居家生活/投資收入/人情交際/一般收入/3C通訊/教育學習/醫療保健/其他\",\"subcategory\":\"子類別\",\"note\":\"商家或備註\"}]\n今天：" + today + "，昨天等相對日期請換算成實際日期，月/日格式請補上年份。";
+
+    const content = [
+      ...uploadedImages.map(img => ({type:"image", source:{type:"base64", media_type:img.type, data:img.base64}})),
+      {type:"text", text:prompt}
+    ];
+
+    try {
+      const headers = {"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+      const fetchP = fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers,
+        body:JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:1500, messages:[{role:"user", content}]})
+      });
+      const timeoutP = new Promise((_,rej) => setTimeout(() => rej(new Error("請求超時，請重試")), 60000));
+      const resp = await Promise.race([fetchP, timeoutP]);
+      const data = await resp.json();
+      if(!resp.ok || data.error) throw new Error(data.error && data.error.message ? data.error.message : "HTTP " + resp.status);
+      const raw = data.content[0].text.replace(/\x60\x60\x60json|\x60\x60\x60/g, "").trim();
+      const parsed = JSON.parse(raw);
+      showParsedResult(parsed);
+      uploadedImages = [];
+      const pp = document.getElementById("img-preview"); if(pp) pp.innerHTML = "";
+      if(btn) btn.style.display = "none";
+    } catch(e) {
+      if(res) res.innerHTML = "<div style='color:var(--red);font-size:12px;padding:10px'>❌ API 錯誤：" + e.message + "<br><span style='color:var(--tx3)'>將自動改用免費 OCR 重試...</span></div>";
+      // Fallback to OCR
+      setTimeout(function(){ parseImagesOCR(); }, 1500);
+    } finally {
+      if(btn){ btn.disabled = false; btn.innerHTML = "🔍 識別截圖"; }
+    }
+  } else {
+    // ── FREE MODE: Tesseract OCR ──
+    await parseImagesOCR();
+  }
+};
+
+async function parseImagesOCR() {
+  const btn = document.getElementById("parse-img-btn");
+  const res = document.getElementById("ai-res");
+  if(btn){ btn.disabled = true; btn.innerHTML = "<span class='spinner'></span>OCR 辨識中..."; }
 
   try {
-    const resp = await Promise.race([fetchP, timeoutP]);
-    const data = await resp.json();
-    if(!resp.ok || data.error) throw new Error(data.error && data.error.message ? data.error.message : "HTTP " + resp.status);
-    const raw = data.content[0].text.replace(/\x60\x60\x60json|\x60\x60\x60/g, "").trim();
-    const parsed = JSON.parse(raw);
+    var allText = "";
+    for(var i = 0; i < uploadedImages.length; i++) {
+      var pct = Math.round((i / uploadedImages.length) * 100);
+      if(res) res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>📸 正在辨識第 " + (i+1) + "/" + uploadedImages.length + " 張圖片（" + pct + "%）...</div>";
+
+      var imgSrc = "data:" + uploadedImages[i].type + ";base64," + uploadedImages[i].base64;
+
+      var result = await Tesseract.recognize(imgSrc, "chi_sim+eng", {
+        logger: function(m) {
+          if(m.status === "recognizing text" && res) {
+            var p2 = Math.round(((i + (m.progress || 0)) / uploadedImages.length) * 100);
+            res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>📸 辨識中 " + p2 + "% ...</div>";
+          }
+        }
+      });
+      allText += result.data.text + "\n---\n";
+    }
+
+    if(res) res.innerHTML = "<div style='color:var(--tx3);font-size:12px;padding:12px'>⚙️ 正在解析交易明細...</div>";
+
+    // Show raw OCR text for debugging in a collapsible
+    var debugHTML = "<details style='margin-top:8px;margin-bottom:12px'><summary style='font-size:11px;color:var(--tx3);cursor:pointer'>📋 OCR 原始文字（點擊查看）</summary><pre style='background:var(--s2);padding:10px;border-radius:8px;font-size:11px;color:var(--tx2);white-space:pre-wrap;max-height:200px;overflow-y:auto;margin-top:6px'>" + allText.replace(/</g,"&lt;") + "</pre></details>";
+
+    var parsed = ocrTextParse(allText);
+
+    if(parsed.length === 0) {
+      if(res) res.innerHTML = debugHTML + "<div style='color:var(--tx2);font-size:13px;padding:16px;background:var(--s2);border-radius:8px'>⚠️ OCR 未能識別出交易。可嘗試：<br>• 確保截圖清晰、文字完整<br>• 使用「貼入文字」手動貼入<br>• 設定 API Key 啟用高精度模式</div>";
+      return;
+    }
+
     showParsedResult(parsed);
-    // Clear images after success
+    // Prepend debug info
+    var resEl = document.getElementById("ai-res");
+    if(resEl) resEl.innerHTML = debugHTML + resEl.innerHTML;
+
     uploadedImages = [];
-    const pp = document.getElementById("img-preview"); if(pp) pp.innerHTML = "";
+    var pp = document.getElementById("img-preview"); if(pp) pp.innerHTML = "";
     if(btn) btn.style.display = "none";
+
   } catch(e) {
-    if(res) res.innerHTML = "<div style='color:var(--red);font-size:12px;padding:10px'>❌ " + e.message + "</div>";
+    if(res) res.innerHTML = "<div style='color:var(--red);font-size:12px;padding:10px'>❌ OCR 辨識失敗：" + e.message + "</div>";
   } finally {
-    if(btn){ btn.disabled = false; btn.innerHTML = "🔍 AI 識別截圖"; }
+    if(btn){ btn.disabled = false; btn.innerHTML = "🔍 識別截圖"; }
   }
+}
+
+// Enhanced parser specifically for OCR text from payment apps
+function ocrTextParse(text) {
+  var results = [];
+  var today = new Date().toISOString().slice(0, 10);
+  var thisYear = new Date().getFullYear();
+
+  // Normalize OCR artifacts
+  text = text
+    .replace(/[，]/g, ",")
+    .replace(/[。]/g, ".")
+    .replace(/[：]/g, ":")
+    .replace(/[（]/g, "(").replace(/[）]/g, ")")
+    .replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 48); });
+
+  var lines = text.split(/[\n\r]+/).map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 1; });
+
+  // Detect WeChat / Alipay / bank patterns
+  var isWeChat = /微信|WeChat|零钱|转账|红包/i.test(text);
+  var isAlipay = /支付宝|Alipay|余额宝|花呗|蚂蚁/i.test(text);
+  var isBank = /银行|信用卡|借记卡|储蓄|credit|debit|visa|master/i.test(text);
+
+  // Global currency detection
+  var globalCur = "CNY";
+  if(/TWD|台幣|NT\$|新台幣/.test(text)) globalCur = "TWD";
+  else if(/HKD|港幣|HK\$/.test(text)) globalCur = "HKD";
+  else if(/USD|US\$/.test(text)) globalCur = "USD";
+  else if(/JPY|日[圓元]|¥.*日/.test(text)) globalCur = "JPY";
+
+  // Category guesser (same as ruleBasedParse but extended)
+  var catMap = [
+    [/余額寶|理財|基金|股票|理财|收益|利息|投資收入|分红|定期/i,"投資收入"],
+    [/紅包|红包|AA|請客|送禮|轉帳|还款|借款|孝養|人情|转账/i,"人情交際"],
+    [/餐飲|美食|午餐|晚餐|早餐|咖啡|麥當勞|星巴克|肯德基|火鍋|外賣|外卖|餐厅|饭店|food|restaurant|超级碗|美团|饿了么|海底捞|瑞幸|奶茶|烧烤|小吃|面包|便利店|超市|盒马|全家|罗森|7-11|seven/i,"餐飲食品"],
+    [/滴滴|交通|地鐵|捷運|公車|巴士|計程|uber|taxi|高鐵|火車|飛機|机票|高速|停车|加油|出行|铁路|12306|航空|哈啰|单车|摩拜/i,"運輸交通"],
+    [/娛樂|電影|KTV|遊戲|演唱|旅遊|旅行|酒店|飯店|hotel|booking|airbnb|门票|景区|游乐|万达|猫眼|大麦/i,"休閒娛樂"],
+    [/服飾|衣|鞋|包|美容|美髮|護膚|化妝|优衣库|zara|h&m|nike|adidas|名创|屈臣氏/i,"服飾美容"],
+    [/手機|電腦|3C|Apple|小米|华为|通訊|话费|充值|会员|通信|中国移动|中国联通|中国电信|流量|iCloud|腾讯|视频|爱奇艺|网易|bilibili|spotify|netflix/i,"3C通訊"],
+    [/房租|水費|電費|瓦斯|網路|物業|超市|家電|水电|燃气|暖气|快递|物流|顺丰|中通|菜鸟|拼多多|淘宝|京东|天猫/i,"居家生活"],
+    [/薪資|薪水|工資|salary|bonus|獎金|工资|奖金|报销/i,"一般收入"],
+    [/醫療|醫院|藥|診所|保健|药店|挂号|体检|口腔|眼科/i,"醫療保健"],
+    [/學費|補習|書|課程|教育|培训|网课|考试/i,"教育學習"]
+  ];
+  function guessCategory(s) {
+    for(var i = 0; i < catMap.length; i++) {
+      if(catMap[i][0].test(s)) return catMap[i][1];
+    }
+    return "其他";
+  }
+
+  // Parse line by line
+  for(var li = 0; li < lines.length; li++) {
+    var line = lines[li];
+
+    // Skip headers, labels, balances
+    if(/^(日期|時間|date|time|項目|類別|金額|备注|summary|合計|總計|账户|余额|balance|当前|可用|本月|上月|年度|查看|详情|收支|筛选)/i.test(line)) continue;
+    if(line.length < 4 || line.length > 200) continue;
+
+    // Extract date
+    var date = today;
+    var dateM = line.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+    if(dateM) {
+      date = dateM[1]+"-"+dateM[2].padStart(2,"0")+"-"+dateM[3].padStart(2,"0");
+    } else {
+      var dm = line.match(/(\d{1,2})[\/\-\.](\d{1,2})/);
+      if(dm) {
+        var m1 = parseInt(dm[1]), m2 = parseInt(dm[2]);
+        if(m1 >= 1 && m1 <= 12 && m2 >= 1 && m2 <= 31) {
+          date = thisYear+"-"+dm[1].padStart(2,"0")+"-"+dm[2].padStart(2,"0");
+        }
+      }
+      // Check previous/next lines for date context
+      if(date === today && li > 0) {
+        var prevDate = lines[li-1].match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+        if(!prevDate) prevDate = lines[li-1].match(/(\d{1,2})[\/\-\.](\d{1,2})/);
+        if(prevDate && prevDate.length >= 3) {
+          if(prevDate.length === 4) date = prevDate[1]+"-"+prevDate[2].padStart(2,"0")+"-"+prevDate[3].padStart(2,"0");
+          else date = thisYear+"-"+prevDate[1].padStart(2,"0")+"-"+prevDate[2].padStart(2,"0");
+        }
+      }
+    }
+    if(/昨天|yesterday/i.test(line)){var d=new Date();d.setDate(d.getDate()-1);date=d.toISOString().slice(0,10);}
+
+    // Extract amounts
+    var amtMatches = line.match(/[+\-¥￥$]?\s*\d[\d,]*\.?\d{0,2}/g);
+    if(!amtMatches) continue;
+
+    var amount = null;
+    for(var ai = amtMatches.length - 1; ai >= 0; ai--) {
+      var n = Math.abs(parseFloat(amtMatches[ai].replace(/[,，\s¥￥$]/g, "")));
+      if(n > 0 && n < 500000 && !(amtMatches[ai].replace(/\s/g,"").match(/^\d{8}$/))) { amount = n; break; }
+    }
+    if(!amount || amount <= 0) continue;
+    // Skip very small amounts that might be OCR noise (like "1" from line numbers)
+    if(amount < 0.01) continue;
+
+    // Type from keywords or sign
+    var lastAmt = amtMatches[amtMatches.length - 1].replace(/\s/g, "");
+    var isNeg = lastAmt.startsWith("-") || /支出|消費|付款|扣款|转出|已支付|待付款/i.test(line);
+    var isPos = lastAmt.startsWith("+") || /收入|收款|转入|到賬|余額寶|退款|退费|已退|红包.*收/i.test(line);
+    var type = isPos ? "income" : "expense";
+
+    // Note: strip dates, amounts, currency symbols
+    var note = line
+      .replace(/\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/g, "")
+      .replace(/\d{1,2}[\/\-\.]\d{1,2}/g, "")
+      .replace(/[+\-¥￥$]?\d[\d,]*\.?\d*/g, "")
+      .replace(/CNY|TWD|HKD|USD|JPY|KRW|¥|￥|\$|NT/g, "")
+      .replace(/支出|收入|消費|付款|收款|已支付|交易成功/g, "")
+      .replace(/[:：\-]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    if(note.length > 60) note = note.substring(0, 60);
+    // Skip if note looks like pure noise (only punctuation or very short)
+    if(note.length <= 1 && amount < 1) continue;
+
+    results.push({ date:date, amount:amount, currency:globalCur, type:type, category:guessCategory(line + " " + note), subcategory:"", note:note });
+  }
+
+  // Deduplicate very similar entries (same amount + same note within 2 lines)
+  var deduped = [];
+  for(var di = 0; di < results.length; di++) {
+    var dup = false;
+    for(var dj = Math.max(0, deduped.length - 2); dj < deduped.length; dj++) {
+      if(deduped[dj].amount === results[di].amount && deduped[dj].note === results[di].note && deduped[dj].date === results[di].date) { dup = true; break; }
+    }
+    if(!dup) deduped.push(results[di]);
+  }
+
+  return deduped;
+}
+
+// ── API Key Management ──
+function getApiKey() {
+  try { return localStorage.getItem("ai-finance-apikey") || ""; } catch(e) { return ""; }
+}
+
+window.saveApiKey = function() {
+  var inp = document.getElementById("api-key-input");
+  var key = (inp ? inp.value : "").trim();
+  if(!key) { toast("請輸入 API Key", "red"); return; }
+  if(!key.startsWith("sk-")) { toast("API Key 格式不正確（應以 sk- 開頭）", "red"); return; }
+  try { localStorage.setItem("ai-finance-apikey", key); } catch(e) {}
+  updateOcrModeLabel();
+  toast("✓ API Key 已儲存", "green");
+};
+
+window.clearApiKey = function() {
+  try { localStorage.removeItem("ai-finance-apikey"); } catch(e) {}
+  var inp = document.getElementById("api-key-input");
+  if(inp) inp.value = "";
+  updateOcrModeLabel();
+  toast("✓ 已切回免費 OCR 模式", "green");
+};
+
+window.toggleApiKeyPanel = function() {
+  var panel = document.getElementById("api-key-panel");
+  if(!panel) return;
+  var vis = panel.style.display !== "none";
+  panel.style.display = vis ? "none" : "block";
+  if(!vis) {
+    var inp = document.getElementById("api-key-input");
+    var key = getApiKey();
+    if(inp && key) inp.value = key;
+  }
+};
+
+function updateOcrModeLabel() {
+  var label = document.getElementById("ocr-mode-label");
+  if(!label) return;
+  var hasKey = !!getApiKey();
+  if(hasKey) {
+    label.innerHTML = "🔑 <span style='color:var(--gold)'>AI 高精度模式</span>";
+    label.nextElementSibling.textContent = "使用 Claude Vision 識別";
+  } else {
+    label.innerHTML = "🔓 免費 OCR 模式";
+    label.nextElementSibling.textContent = "瀏覽器內辨識，無需 API key";
+  }
+}
+
+window.skipImport = function() {
+  BASE_DATA = [];
+  saveBase();
+  var ov=document.getElementById("welcome-overlay");
+  if(ov)ov.remove();
+  setTimeout(function(){ initUI(); }, 50);
+};
+
+window.loadBaseData = function(input) {
+  const file = input.files ? input.files[0] : input;
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const payload = JSON.parse(e.target.result);
+      const records = payload.records || payload;
+      if(!Array.isArray(records)) throw new Error("格式錯誤");
+      // Normalize records for compatibility with old "理財幫手" format
+      BASE_DATA = records.map(function(r){
+        var rec = Object.assign({}, r);
+        // Ensure date is YYYYMMDD string
+        if(rec.d && typeof rec.d === "string"){
+          rec.d = rec.d.replace(/[-\/]/g, "");
+        } else if(rec.date){
+          rec.d = String(rec.date).replace(/[-\/]/g, "");
+          delete rec.date;
+        }
+        // Ensure amount is number
+        if(rec.amount !== undefined && rec.a === undefined){
+          rec.a = Math.abs(parseFloat(rec.amount)) || 0;
+          delete rec.amount;
+        }
+        if(typeof rec.a === "string") rec.a = Math.abs(parseFloat(rec.a.replace(/[,，]/g, ""))) || 0;
+        // Ensure type: e/i/x
+        if(rec.type && !rec.t){
+          var tp = String(rec.type).toLowerCase();
+          rec.t = tp === "income" || tp === "i" ? "i" : tp === "transfer" || tp === "x" ? "x" : "e";
+          delete rec.type;
+        }
+        if(!rec.t) rec.t = "e";
+        // Ensure category
+        if(rec.category && !rec.c){ rec.c = rec.category; delete rec.category; }
+        if(!rec.c) rec.c = "其他";
+        // Optional fields
+        if(rec.subcategory && !rec.s){ rec.s = rec.subcategory; delete rec.subcategory; }
+        if(rec.note && !rec.n){ rec.n = rec.note; delete rec.note; }
+        if(rec.currency && !rec.cur){ rec.cur = rec.currency; delete rec.currency; }
+        return rec;
+      });
+      saveBase();
+      rebuildAllData();
+      var ov=document.getElementById("welcome-overlay");
+      if(ov)ov.remove();
+      initUI();
+      toast("✓ 已載入 " + BASE_DATA.length + " 筆歷史資料", "green");
+    } catch(err) {
+      toast("❌ 匯入失敗：" + err.message, "red");
+    }
+  };
+  reader.readAsText(file);
+};
+
+window.saveInitTWD = function() {
+  const inp = document.getElementById("init-twd-input");
+  const val = parseFloat((inp ? inp.value : "0").replace(/[,，]/g, "")) || 0;
+  INIT_TWD = val;
+  window._INIT_TWD = val;
+  try { localStorage.setItem("ai-finance-init", val); } catch(e) {}
+  const m = document.getElementById("init-twd-modal");
+  if(m) m.style.display = "none";
+  // Update display
+  var initEl = document.getElementById("c-init-twd");
+  if(initEl) initEl.textContent = "NT$ " + Math.round(val).toLocaleString("zh-TW");
+  renderOv();
+  toast("✓ 起始資產已更新", "green");
+};
+
+window.openInitModal = function() {
+  const inp = document.getElementById("init-twd-input");
+  if(inp) inp.value = INIT_TWD || 0;
+  const m = document.getElementById("init-twd-modal");
+  if(m) m.style.display = "flex";
 };
 
 document.addEventListener("DOMContentLoaded",init);
@@ -764,5 +1110,22 @@ function switchTab(tab) {
   if(pt)pt.style.display=isImg?"none":"block";
 }
 </script>
+
+<div id="init-twd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,0.5)">
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px">✏️ Day 1 起始資產</div>
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:16px;line-height:1.6">開始記帳當天的總資產（台幣），用於計算估計總資產。</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <span style="color:var(--tx2);font-size:14px">NT$</span>
+      <input type="number" id="init-twd-input" placeholder="0" style="flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:10px 12px;border-radius:8px;font-size:16px;font-family:'DM Mono',monospace;outline:none">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="saveInitTWD()" style="flex:1">✓ 儲存</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('init-twd-modal').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+
 </body>
 </html>
