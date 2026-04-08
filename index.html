@@ -127,6 +127,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
     <div class="nav-item" data-page="records"><span style="width:20px;text-align:center">≡</span> 明細記錄</div>
     <div class="nav-item" data-page="import"><span style="width:20px;text-align:center">⊕</span> AI 匯入</div>
     <div class="nav-item" data-page="fx"><span style="width:20px;text-align:center">⟳</span> 匯率設定</div>
+    <div class="nav-item" data-page="catmgr"><span style="width:20px;text-align:center">◪</span> 分類管理</div>
     <div class="nav-bottom">
       <div style="color:var(--tx3);font-size:11px;line-height:1.9">
         📊 已載入 <span id="total-count" style="color:var(--gold)">0</span> 筆
@@ -156,9 +157,9 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
         <div class="cbox"><div class="ctitle">月支出趨勢</div><div style="position:relative;height:220px"><canvas id="ch-mly"></canvas></div></div>
         <div class="cbox"><div class="ctitle">支出分類（點擊細項）</div><div style="position:relative;height:220px"><canvas id="ch-cat"></canvas></div></div>
       </div>
-      <div class="cr2">
-        <div class="cbox"><div class="ctitle">支付方式</div><div style="position:relative;height:180px"><canvas id="ch-pay"></canvas></div></div>
-        <div class="cbox"><div class="ctitle">收入來源</div><div style="position:relative;height:180px"><canvas id="ch-isrc"></canvas></div></div>
+      <div class="cr">
+        <div class="cbox"><div class="ctitle">月收入趨勢</div><div style="position:relative;height:220px"><canvas id="ch-inc-mly"></canvas></div></div>
+        <div class="cbox"><div class="ctitle">收入來源</div><div style="position:relative;height:220px"><canvas id="ch-isrc"></canvas></div></div>
       </div>
     </div>
     <!-- MONTHLY -->
@@ -245,7 +246,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
           <p>單筆記錄快速輸入。</p>
           <div class="frow"><div class="fg"><label>日期</label><input type="date" id="q-date"></div><div class="fg"><label>金額</label><input type="number" id="q-amt" placeholder="0"></div></div>
           <div class="frow"><div class="fg"><label>幣別</label><select id="q-cur"><option value="TWD">TWD 台幣</option><option value="CNY">CNY 人民幣</option><option value="HKD">HKD 港幣</option><option value="USD">USD 美元</option><option value="JPY">JPY 日圓</option><option value="KRW">KRW 韓元</option><option value="EUR">EUR 歐元</option><option value="SGD">SGD 新幣</option><option value="AUD">AUD 澳幣</option><option value="THB">THB 泰銖</option><option value="GBP">GBP 英鎊</option></select></div><div class="fg"><label>類型</label><select id="q-type"><option value="e">支出</option><option value="i">收入</option><option value="x">轉帳</option></select></div></div>
-          <div class="frow"><div class="fg"><label>類別 <span onclick="promptNewCat()" style="cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0">＋新增</span></label><select id="q-cat"></select></div><div class="fg"><label>子類別 <span onclick="promptNewSub()" style="cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0">＋新增</span></label><select id="q-sub"></select></div></div>
+          <div class="frow"><div class="fg"><label>類別 <span onclick="promptNewCat()" style="cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0">＋新增</span> <span onclick="manageCats()" style="cursor:pointer;color:var(--tx3);font-size:10px;text-transform:none;letter-spacing:0">🗑管理</span></label><select id="q-cat"></select></div><div class="fg"><label>子類別 <span onclick="promptNewSub()" style="cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0">＋新增</span> <span onclick="manageSubs()" style="cursor:pointer;color:var(--tx3);font-size:10px;text-transform:none;letter-spacing:0">🗑管理</span></label><select id="q-sub"></select></div></div>
           <div class="fg" style="margin-bottom:14px"><label>備註</label><input type="text" id="q-note" placeholder="商家名稱、備註..."></div>
           <button class="btn btn-teal" id="q-add-btn">新增記錄</button>
         </div>
@@ -266,6 +267,16 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="page-title">匯率設定</div>
       <div class="page-sub">各幣別每月換算成 TWD 的匯率</div>
       <div id="fx-content"></div>
+    </div>
+    <!-- CATEGORY MANAGEMENT -->
+    <div class="page" id="page-catmgr">
+      <div class="page-title">分類管理</div>
+      <div class="page-sub">管理所有大分類與子分類，隱藏不需要的、新增自訂的</div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+        <button class="btn" onclick="promptNewCat();renderCatMgr()">＋ 新增大分類</button>
+        <button class="btn btn-ghost" onclick="restoreAllCats()">↩ 還原全部隱藏</button>
+      </div>
+      <div id="catmgr-content"></div>
     </div>
   </div>
 </div>
@@ -367,7 +378,7 @@ function showPage(p){
   document.querySelectorAll(".nav-item").forEach(el=>el.classList.remove("active"));
   const pg=$("page-"+p);if(!pg)return;pg.classList.add("active");
   const nv=document.querySelector('.nav-item[data-page="'+p+'"]');if(nv)nv.classList.add("active");
-  if(p==="overview")renderOv();else if(p==="monthly")renderMth();else if(p==="records")renderRec();else if(p==="import")renderNew();else if(p==="fx")renderFX();
+  if(p==="overview")renderOv();else if(p==="monthly")renderMth();else if(p==="records")renderRec();else if(p==="import")renderNew();else if(p==="fx")renderFX();else if(p==="catmgr")renderCatMgr();
 }
 
 function mkYrBtn(label,val,active,container,cb){
@@ -449,7 +460,7 @@ function initUI(){
   const years=[...new Set(allData.map(r=>yr(r.d)))].sort();
   const ovEl=$("ov-years");if(ovEl){ovEl.innerHTML="";mkYrBtn("全部","all",true,ovEl,v=>{ovY=v;renderOv();});years.forEach(y=>mkYrBtn(y,y,false,ovEl,v=>{ovY=v;renderOv();}));}
   const mthEl=$("mth-years");if(mthEl){mthEl.innerHTML="";years.forEach(y=>mkYrBtn(y,y,y===mthY,mthEl,v=>{mthY=v;renderMth();}));}
-  const catSel=$("s-cat");if(catSel){catSel.innerHTML='<option value="">全部類別</option>';[...new Set(allData.map(r=>r.c))].sort().forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;catSel.appendChild(o);});}
+  const catSel=$("s-cat");if(catSel){catSel.innerHTML='<option value="">全部類別</option>';sortByFreq([...new Set(allData.map(r=>r.c))], getCatFreq()).forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;catSel.appendChild(o);});}
   const yrSel=$("s-year");if(yrSel){yrSel.innerHTML='<option value="">全部年份</option>';years.forEach(y=>{const o=document.createElement("option");o.value=y;o.textContent=y;yrSel.appendChild(o);});}
   updateQCats();const qd=$("q-date");if(qd)qd.valueAsDate=new Date();
   [["s-q","input",renderRec],["s-type","change",renderRec],["s-cat","change",renderRec],["s-year","change",renderRec],["s-month","change",renderRec],["load-more","click",()=>{dispN+=60;renderList();}],["btn-add","click",()=>showPage("import")],["parse-btn","click",parseText],["clear-btn","click",()=>{const t=$("import-txt");if(t)t.value="";}],["q-add-btn","click",quickAdd],["q-type","change",updateQCats],["q-cat","change",updateQSubs]].forEach(([id,ev,fn])=>{const el=$(id);if(el)el.addEventListener(ev,fn);});
@@ -481,9 +492,11 @@ function renderOv(){
   const cmap={};exp.forEach(r=>{cmap[r.c]=(cmap[r.c]||0)+toTWD(r);});
   const ctop=Object.entries(cmap).sort((a,b)=>b[1]-a[1]).slice(0,8);
   dc("cat");ch["cat"]=new Chart($("ch-cat"),{type:"doughnut",data:{labels:ctop.map(([k])=>k),datasets:[{data:ctop.map(([,v])=>Math.round(v)),backgroundColor:ctop.map(([k])=>CC[k]||"#64748b"),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",onClick:(e,els)=>{if(els.length)showCatDrill(ctop[els[0].index][0],getByY(ovY));},plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10},onClick:(e,item)=>showCatDrill(item.text,getByY(ovY))},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()+" (點擊細項)"}}}}});
-  const pmap={};exp.forEach(r=>{const k=r.f||"未知";pmap[k]=(pmap[k]||0)+toTWD(r);});
-  const pl=Object.entries(pmap).sort((a,b)=>b[1]-a[1]);
-  dc("pay");ch["pay"]=new Chart($("ch-pay"),{type:"bar",data:{labels:pl.map(([k])=>k),datasets:[{data:pl.map(([,v])=>Math.round(v)),backgroundColor:["#4ecdc4","#f0c060","#a78bfa","#fb923c","#f9a8d4"],borderWidth:0,borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"NT$ "+c.raw.toLocaleString()}}},scales:{x:{ticks:{color:"#4a5568",font:{size:9},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,0.04)"}},y:{ticks:{color:"#8892a4",font:{size:11}},grid:{display:false}}}}});
+  // Monthly income trend
+  const incmap={};inc.forEach(r=>{const k=yr(r.d)+"/"+mo(r.d);incmap[k]=(incmap[k]||0)+toTWD(r);});
+  const ik=Object.keys(incmap).sort().slice(-24);
+  dc("incmly");if($("ch-inc-mly"))ch["incmly"]=new Chart($("ch-inc-mly"),{type:"bar",data:{labels:ik,datasets:[{data:ik.map(k=>Math.round(incmap[k])),backgroundColor:"rgba(78,205,196,0.7)",borderColor:"#4ecdc4",borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"NT$ "+c.raw.toLocaleString()}}},scales:{x:{ticks:{color:"#4a5568",font:{size:9}},grid:{color:"rgba(255,255,255,0.04)"}},y:{ticks:{color:"#4a5568",font:{size:9},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,0.04)"}}}}});
+
   const imap={};inc.forEach(r=>{imap[r.c]=(imap[r.c]||0)+toTWD(r);});
   const il=Object.entries(imap).sort((a,b)=>b[1]-a[1]);
   dc("isrc");ch["isrc"]=new Chart($("ch-isrc"),{type:"doughnut",data:{labels:il.map(([k])=>k),datasets:[{data:il.map(([,v])=>Math.round(v)),backgroundColor:["#34d399","#4ecdc4","#86efac","#a7f3d0","#6ee7b7","#fcd34d"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()}}}}});
@@ -646,7 +659,7 @@ function showParsedResult(parsed){
   // Build category list for dropdowns
   var allCatSet={};allData.forEach(function(x){allCatSet[x.c]=1;});
   var cc2=getCustomCats();for(var ck2 in cc2)allCatSet[ck2]=1;for(var bk2 in CATS)allCatSet[bk2]=1;
-  var catList=Object.keys(allCatSet).sort();
+  var catList=filterHidden(sortByFreq(Object.keys(allCatSet), getCatFreq()));
   var allC=getAllCats();
 
   let h="<div style='margin-top:14px;margin-bottom:8px;font-size:12px;color:var(--teal)'>✓ 解析成功，共 "+parsed.length+" 筆（可直接修改分類 / 子類別）：</div>";
@@ -655,8 +668,8 @@ function showParsedResult(parsed){
     var catOpts = catList.map(function(c){ return "<option"+(c===r.category?" selected":"")+">"+c+"</option>"; }).join("");
     if(catList.indexOf(r.category)===-1) catOpts += "<option selected>"+r.category+"</option>";
 
-    // Build subcategory options for current category
-    var subs = allC[r.category] || [];
+    // Build subcategory options for current category (sorted by frequency)
+    var subs = sortByFreq(allC[r.category] || [], getSubFreq(r.category));
     var subOpts = '<option value="">—</option>' + subs.map(function(s){ return "<option"+(s===r.subcategory?" selected":"")+">"+s+"</option>"; }).join("");
     if(r.subcategory && subs.indexOf(r.subcategory)===-1) subOpts += "<option selected>"+r.subcategory+"</option>";
 
@@ -688,7 +701,7 @@ window.updateImpRow = function(idx) {
   window._pendingImport[idx].category = cat;
   window._pendingImport[idx].subcategory = "";
   var allC = getAllCats();
-  var subs = allC[cat] || [];
+  var subs = sortByFreq(allC[cat] || [], getSubFreq(cat));
   subSel.innerHTML = '<option value="">—</option>' + subs.map(function(s){ return "<option>"+s+"</option>"; }).join("");
 };
 
@@ -758,9 +771,7 @@ function saveCustomCats(cc) {
 function getAllCats() {
   var cc = getCustomCats();
   var merged = {};
-  // Copy built-in
   for(var k in CATS) merged[k] = (CATS[k] || []).slice();
-  // Merge custom
   for(var k2 in cc) {
     if(!merged[k2]) merged[k2] = [];
     for(var si = 0; si < (cc[k2] || []).length; si++) {
@@ -769,6 +780,158 @@ function getAllCats() {
   }
   return merged;
 }
+
+// ── Frequency-based sorting ──
+function getCatFreq() {
+  var freq = {};
+  allData.forEach(function(r) {
+    freq[r.c] = (freq[r.c] || 0) + 1;
+  });
+  return freq;
+}
+function getSubFreq(cat) {
+  var freq = {};
+  allData.forEach(function(r) {
+    if(r.c === cat && r.s) freq[r.s] = (freq[r.s] || 0) + 1;
+  });
+  return freq;
+}
+function sortByFreq(list, freqMap) {
+  return list.slice().sort(function(a, b) {
+    var fa = freqMap[a] || 0, fb = freqMap[b] || 0;
+    if(fb !== fa) return fb - fa; // higher frequency first
+    return a.localeCompare(b, "zh-TW"); // alphabetical fallback
+  });
+}
+
+// ── Delete custom category / subcategory ──
+window.deleteCustomCat = function(name) {
+  if(!confirm("確定刪除類別「" + name + "」？\n（只刪除自訂類別，已有記錄不受影響）")) return;
+  var cc = getCustomCats();
+  delete cc[name];
+  saveCustomCats(cc);
+  updateQCats();
+  toast("✓ 已刪除類別：" + name, "green");
+};
+window.deleteCustomSub = function(cat, sub) {
+  if(!confirm("確定刪除子類別「" + sub + "」？")) return;
+  var cc = getCustomCats();
+  if(cc[cat]) {
+    cc[cat] = cc[cat].filter(function(s){ return s !== sub; });
+    if(cc[cat].length === 0) delete cc[cat];
+    saveCustomCats(cc);
+  }
+  updateQSubs();
+  toast("✓ 已刪除子類別：" + sub, "green");
+};
+
+// ── Hidden Categories (hide built-in or any category from dropdowns) ──
+function getHiddenCats() {
+  try { var s = localStorage.getItem("ai-finance-hidden-cats"); return s ? JSON.parse(s) : []; } catch(e) { return []; }
+}
+function saveHiddenCats(list) {
+  try { localStorage.setItem("ai-finance-hidden-cats", JSON.stringify(list)); } catch(e) {}
+}
+window.hideCat = function(name) {
+  var h = getHiddenCats();
+  if(h.indexOf(name) === -1) h.push(name);
+  saveHiddenCats(h);
+  renderCatMgr();
+  toast("✓ 已隱藏：" + name, "green");
+};
+window.unhideCat = function(name) {
+  var h = getHiddenCats().filter(function(x){ return x !== name; });
+  saveHiddenCats(h);
+  renderCatMgr();
+  toast("✓ 已恢復：" + name, "green");
+};
+window.restoreAllCats = function() {
+  saveHiddenCats([]);
+  renderCatMgr();
+  toast("✓ 已還原全部隱藏", "green");
+};
+// Filter hidden from a category list
+function filterHidden(list) {
+  var h = getHiddenCats();
+  return list.filter(function(c){ return h.indexOf(c) === -1; });
+}
+
+// ── Category Management Page ──
+function renderCatMgr() {
+  var el = document.getElementById("catmgr-content");
+  if(!el) return;
+  var freq = getCatFreq();
+  var hidden = getHiddenCats();
+  var cc = getCustomCats();
+  var allC = getAllCats();
+
+  // Gather all known categories
+  var allCatSet = {};
+  for(var bk in CATS) allCatSet[bk] = "builtin";
+  for(var ck in cc) { if(!allCatSet[ck]) allCatSet[ck] = "custom"; }
+  allData.forEach(function(r){ if(!allCatSet[r.c]) allCatSet[r.c] = "data"; });
+  var cats = sortByFreq(Object.keys(allCatSet), freq);
+
+  var html = "";
+  cats.forEach(function(cat) {
+    var f = freq[cat] || 0;
+    var isHidden = hidden.indexOf(cat) !== -1;
+    var type = allCatSet[cat];
+    var typeLabel = type === "builtin" ? "" : type === "custom" ? " <span style='font-size:9px;color:var(--gold)'>自訂</span>" : " <span style='font-size:9px;color:var(--tx3)'>資料</span>";
+
+    // Subcategories
+    var subs = sortByFreq(allC[cat] || [], getSubFreq(cat));
+    var customSubs = cc[cat] || [];
+
+    html += "<div style='background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;margin-bottom:12px"+(isHidden?";opacity:0.45":"")+"'>"
+      + "<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:"+(subs.length?"10":"0")+"px'>"
+      + "<div style='display:flex;align-items:center;gap:8px'>"
+      + "<span class='dot' style='background:"+(CC[cat]||"#64748b")+";width:10px;height:10px'></span>"
+      + "<span style='font-size:14px;font-weight:600'>"+cat+"</span>"
+      + typeLabel
+      + "<span style='font-size:11px;color:var(--tx3)'>"+f+" 筆</span>"
+      + "</div>"
+      + "<div style='display:flex;gap:6px'>"
+      + (isHidden
+        ? "<button onclick='unhideCat(\""+cat+"\")' class='btn btn-ghost' style='padding:3px 10px;font-size:11px'>👁 恢復</button>"
+        : "<button onclick='hideCat(\""+cat+"\")' style='background:transparent;border:1px solid var(--bd);color:var(--tx3);padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px'>隱藏</button>")
+      + (type === "custom" ? "<button onclick='deleteCustomCat(\""+cat+"\");renderCatMgr()' style='background:transparent;border:1px solid rgba(255,107,107,0.3);color:var(--red);padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px'>刪除</button>" : "")
+      + "</div></div>";
+
+    // Show subcategories
+    if(subs.length) {
+      html += "<div style='display:flex;flex-wrap:wrap;gap:6px;padding-left:18px'>";
+      subs.forEach(function(sub) {
+        var sf = getSubFreq(cat)[sub] || 0;
+        var isCSub = customSubs.indexOf(sub) !== -1;
+        html += "<div style='display:inline-flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:11px'>"
+          + "<span>"+sub+"</span>"
+          + "<span style='color:var(--tx3);font-size:9px'>"+sf+"</span>"
+          + (isCSub ? "<span onclick='deleteCustomSub(\""+cat+"\",\""+sub+"\");renderCatMgr()' style='cursor:pointer;color:var(--red);font-size:12px;margin-left:2px'>×</span>" : "")
+          + "</div>";
+      });
+      html += "<div onclick='catMgrAddSub(\""+cat+"\")' style='display:inline-flex;align-items:center;gap:2px;background:transparent;border:1px dashed var(--bd);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--gold);cursor:pointer'>＋</div>";
+      html += "</div>";
+    } else {
+      html += "<div style='padding-left:18px'><span onclick='catMgrAddSub(\""+cat+"\")' style='font-size:11px;color:var(--gold);cursor:pointer'>＋ 新增子類別</span></div>";
+    }
+
+    html += "</div>";
+  });
+  el.innerHTML = html;
+}
+
+window.catMgrAddSub = function(cat) {
+  var name = prompt("在「"+cat+"」下新增子類別：");
+  if(!name || !name.trim()) return;
+  name = name.trim();
+  var cc2 = getCustomCats();
+  if(!cc2[cat]) cc2[cat] = [];
+  if(cc2[cat].indexOf(name) === -1) cc2[cat].push(name);
+  saveCustomCats(cc2);
+  renderCatMgr();
+  toast("✓ 已新增子類別：" + name, "green");
+};
 
 window.promptNewCat = function() {
   var name = prompt("輸入新類別名稱：");
@@ -801,17 +964,94 @@ window.promptNewSub = function() {
   toast("✓ 已新增子類別：" + name, "green");
 };
 
-function updateQCats(){const t=($("q-type")||{}).value||"e";const ec=["餐飲食品","運輸交通","休閒娛樂","服飾美容","居家生活","人情交際","3C通訊","教育學習","醫療保健","其他","費用"],ic=["一般收入","投資收入","禮金","購物退費","媽媽","秉鈞"];
-  var base = t==="i" ? ic : ec;
-  // Add custom categories not in base
+function updateQCats(){
+  const t=($("q-type")||{}).value||"e";
+  const ec=["餐飲食品","運輸交通","休閒娛樂","服飾美容","居家生活","人情交際","3C通訊","教育學習","醫療保健","其他","費用","購物退費"];
+  const ic=["一般收入","投資收入","禮金","購物退費","媽媽","秉鈞"];
+  var base = t==="i" ? ic.slice() : ec.slice();
   var cc = getCustomCats();
   for(var k in cc) { if(base.indexOf(k) === -1) base.push(k); }
-  // Also add categories from existing data
   var dataCats = [...new Set(allData.map(function(r){return r.c;}))];
   for(var di = 0; di < dataCats.length; di++) { if(base.indexOf(dataCats[di]) === -1) base.push(dataCats[di]); }
-  const sel=$("q-cat");if(sel)sel.innerHTML=base.map(c=>"<option>"+c+"</option>").join("");updateQSubs();}
+  // Sort by usage frequency, then filter hidden
+  var freq = getCatFreq();
+  base = filterHidden(sortByFreq(base, freq));
+  const sel=$("q-cat");if(sel)sel.innerHTML=base.map(c=>"<option>"+c+"</option>").join("");
+  updateQSubs();
+}
 
-function updateQSubs(){const cat=($("q-cat")||{}).value||"";var allC=getAllCats();const s=allC[cat]||[];const sel=$("q-sub");if(sel)sel.innerHTML='<option value="">（不指定）</option>'+s.map(x=>"<option>"+x+"</option>").join("");}
+function updateQSubs(){
+  const cat=($("q-cat")||{}).value||"";
+  var allC=getAllCats();
+  var s=allC[cat]||[];
+  // Sort by usage frequency
+  var freq = getSubFreq(cat);
+  s = sortByFreq(s, freq);
+  const sel=$("q-sub");
+  if(sel) sel.innerHTML='<option value="">（不指定）</option>'+s.map(x=>"<option>"+x+"</option>").join("");
+}
+
+// ── Category/Subcategory management modals ──
+window.manageCats = function() {
+  var cc = getCustomCats();
+  var customKeys = Object.keys(cc);
+  var freq = getCatFreq();
+  // Show all categories with freq, custom ones have delete button
+  var allCatSet = {};
+  for(var bk in CATS) allCatSet[bk] = { builtin: true };
+  for(var ck in cc) allCatSet[ck] = allCatSet[ck] || { builtin: false };
+  allData.forEach(function(r){ if(!allCatSet[r.c]) allCatSet[r.c] = { builtin: false }; });
+  var cats = Object.keys(allCatSet);
+  cats = sortByFreq(cats, freq);
+
+  var html = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px'><div style='font-size:16px;font-weight:600'>管理類別</div><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
+    + "<div style='font-size:11px;color:var(--tx3);margin-bottom:12px'>按使用頻率排序・自訂類別可刪除</div>";
+  cats.forEach(function(cat) {
+    var isCustom = !CATS[cat]; // not built-in
+    var f = freq[cat] || 0;
+    html += "<div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)'>"
+      + "<div><span style='font-size:13px'>"+cat+"</span> <span style='font-size:10px;color:var(--tx3);margin-left:4px'>"+f+" 筆</span>"
+      + (isCustom ? " <span style='font-size:9px;color:var(--gold)'>自訂</span>" : "")
+      + "</div>"
+      + (isCustom ? "<button onclick='deleteCustomCat(\""+cat+"\");manageCats()' style='background:transparent;border:1px solid rgba(255,107,107,0.3);color:var(--red);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:11px'>刪除</button>" : "")
+      + "</div>";
+  });
+  var dc2 = document.getElementById("drill-content");
+  if(dc2) dc2.innerHTML = html;
+  var dm = document.getElementById("drill-modal");
+  if(dm) dm.style.display = "flex";
+};
+
+window.manageSubs = function() {
+  var cat = ($("q-cat") || {}).value || "";
+  if(!cat) { toast("請先選擇類別", "red"); return; }
+  var allC = getAllCats();
+  var subs = allC[cat] || [];
+  var freq = getSubFreq(cat);
+  subs = sortByFreq(subs, freq);
+  var cc = getCustomCats();
+  var customSubs = (cc[cat] || []);
+
+  var html = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px'><div style='font-size:16px;font-weight:600'>"+cat+" 子類別</div><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
+    + "<div style='font-size:11px;color:var(--tx3);margin-bottom:12px'>按使用頻率排序・自訂子類別可刪除</div>";
+  if(subs.length === 0) {
+    html += "<div style='color:var(--tx3);font-size:13px;padding:20px 0;text-align:center'>此類別尚無子類別</div>";
+  }
+  subs.forEach(function(sub) {
+    var isCustom = customSubs.indexOf(sub) !== -1;
+    var f = freq[sub] || 0;
+    html += "<div style='display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)'>"
+      + "<div><span style='font-size:13px'>"+sub+"</span> <span style='font-size:10px;color:var(--tx3);margin-left:4px'>"+f+" 筆</span>"
+      + (isCustom ? " <span style='font-size:9px;color:var(--gold)'>自訂</span>" : "")
+      + "</div>"
+      + (isCustom ? "<button onclick='deleteCustomSub(\""+cat+"\",\""+sub+"\");manageSubs()' style='background:transparent;border:1px solid rgba(255,107,107,0.3);color:var(--red);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:11px'>刪除</button>" : "")
+      + "</div>";
+  });
+  var dc2 = document.getElementById("drill-content");
+  if(dc2) dc2.innerHTML = html;
+  var dm = document.getElementById("drill-modal");
+  if(dm) dm.style.display = "flex";
+};
 function quickAdd(){
   const date=($("q-date")||{}).value||"",amt=parseFloat(($("q-amt")||{}).value||"");
   const tp=($("q-type")||{}).value||"e",cat=($("q-cat")||{}).value||"",sub=($("q-sub")||{}).value||"",note=($("q-note")||{}).value||"",cur=($("q-cur")||{}).value||"TWD";
@@ -857,13 +1097,13 @@ window.openEdit=function(idx){
   const newIdx=newRec.findIndex(n=>n.d===r.d&&n.a===r.a&&n.c===r.c&&n.t===r.t&&(n.n||"")===(r.n||""));const isNew=newIdx>=0;
   const emc=$("edit-modal-content");if(!emc)return;
   const curs=["TWD","CNY","HKD","USD","JPY","KRW","EUR","SGD","AUD","THB","GBP"];
-  // Build full category list
+  // Build full category list (frequency sorted)
   var allCatSet={};allData.forEach(function(x){allCatSet[x.c]=1;});
   var cc=getCustomCats();for(var ck in cc)allCatSet[ck]=1;for(var bk in CATS)allCatSet[bk]=1;
-  var catList=Object.keys(allCatSet).sort();
+  var catList=filterHidden(sortByFreq(Object.keys(allCatSet), getCatFreq()));
   if(r.c && catList.indexOf(r.c)===-1) catList.push(r.c);
-  // Build subcategory list
-  var allC=getAllCats();var subs=allC[r.c]||[];
+  // Build subcategory list (frequency sorted)
+  var allC=getAllCats();var subs=sortByFreq(allC[r.c]||[], getSubFreq(r.c));
   var subOpts='<option value="">（不指定）</option>'+subs.map(function(x){return"<option"+(x===(r.s||"")?" selected":"")+">"+x+"</option>";}).join("");
   if(r.s && subs.indexOf(r.s)===-1) subOpts+="<option selected>"+r.s+"</option>";
 
@@ -877,7 +1117,7 @@ window.openEdit=function(idx){
 };
 window.editModalUpdateSubs=function(){
   var cat=(document.getElementById("ed-cat")||{}).value||"";
-  var allC=getAllCats();var subs=allC[cat]||[];
+  var allC=getAllCats();var subs=sortByFreq(allC[cat]||[], getSubFreq(cat));
   var sel=document.getElementById("ed-sub");
   if(sel)sel.innerHTML='<option value="">（不指定）</option>'+subs.map(function(x){return"<option>"+x+"</option>";}).join("");
 };
