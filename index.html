@@ -647,20 +647,28 @@ function showParsedResult(parsed){
   var allCatSet={};allData.forEach(function(x){allCatSet[x.c]=1;});
   var cc2=getCustomCats();for(var ck2 in cc2)allCatSet[ck2]=1;for(var bk2 in CATS)allCatSet[bk2]=1;
   var catList=Object.keys(allCatSet).sort();
+  var allC=getAllCats();
 
-  let h="<div style='margin-top:14px;margin-bottom:8px;font-size:12px;color:var(--teal)'>✓ 解析成功，共 "+parsed.length+" 筆（可直接修改分類）：</div>";
+  let h="<div style='margin-top:14px;margin-bottom:8px;font-size:12px;color:var(--teal)'>✓ 解析成功，共 "+parsed.length+" 筆（可直接修改分類 / 子類別）：</div>";
   parsed.forEach(function(r, idx) {
     var isFX = r.currency && r.currency !== "TWD";
     var catOpts = catList.map(function(c){ return "<option"+(c===r.category?" selected":"")+">"+c+"</option>"; }).join("");
     if(catList.indexOf(r.category)===-1) catOpts += "<option selected>"+r.category+"</option>";
 
-    h += "<div class='isrow' style='display:flex;flex-wrap:wrap;align-items:center;gap:6px'>"
+    // Build subcategory options for current category
+    var subs = allC[r.category] || [];
+    var subOpts = '<option value="">—</option>' + subs.map(function(s){ return "<option"+(s===r.subcategory?" selected":"")+">"+s+"</option>"; }).join("");
+    if(r.subcategory && subs.indexOf(r.subcategory)===-1) subOpts += "<option selected>"+r.subcategory+"</option>";
+
+    h += "<div class='isrow' style='display:flex;flex-wrap:wrap;align-items:center;gap:5px'>"
       + "<span style='color:var(--tx2);font-family:DM Mono,monospace;font-size:11px'>"+r.date+"</span>"
       + " <span class='tag "+(r.type==="income"?"inc":"exp")+"'>"+(r.type==="income"?"收入":"支出")+"</span>"
       + (isFX?" <span style='font-size:10px;background:rgba(167,139,250,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px'>"+r.currency+"</span>":"")
-      + " <strong style='margin:0 4px;font-size:13px'>"+Number(r.amount).toLocaleString()+"</strong>"
-      + "<select onchange='window._pendingImport["+idx+"].category=this.value' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none'>"+catOpts+"</select>"
-      + (r.note?" <span class='tag' style='max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+r.note+"</span>":"")
+      + " <strong style='margin:0 3px;font-size:13px'>"+Number(r.amount).toLocaleString()+"</strong>"
+      + "<select id='imp-cat-"+idx+"' onchange='updateImpRow("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:100px'>"+catOpts+"</select>"
+      + "<select id='imp-sub-"+idx+"' onchange='updateImpSub("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:90px'>"+subOpts+"</select>"
+      + "<span onclick='addImpSub("+idx+")' style='cursor:pointer;color:var(--gold);font-size:10px;flex-shrink:0'>＋</span>"
+      + (r.note?" <span class='tag' style='max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+r.note+"</span>":"")
       + "</div>";
   });
   window._pendingImport=parsed;
@@ -670,6 +678,48 @@ function showParsedResult(parsed){
   if(cb)cb.addEventListener("click",confirmImport);
   if(xb)xb.addEventListener("click",()=>{res.innerHTML="";});
 }
+
+// When category dropdown changes → update subcategory dropdown
+window.updateImpRow = function(idx) {
+  var catSel = document.getElementById("imp-cat-"+idx);
+  var subSel = document.getElementById("imp-sub-"+idx);
+  if(!catSel || !subSel) return;
+  var cat = catSel.value;
+  window._pendingImport[idx].category = cat;
+  window._pendingImport[idx].subcategory = "";
+  var allC = getAllCats();
+  var subs = allC[cat] || [];
+  subSel.innerHTML = '<option value="">—</option>' + subs.map(function(s){ return "<option>"+s+"</option>"; }).join("");
+};
+
+// When subcategory dropdown changes
+window.updateImpSub = function(idx) {
+  var subSel = document.getElementById("imp-sub-"+idx);
+  if(!subSel) return;
+  window._pendingImport[idx].subcategory = subSel.value;
+};
+
+// Add new subcategory inline
+window.addImpSub = function(idx) {
+  var catSel = document.getElementById("imp-cat-"+idx);
+  var cat = catSel ? catSel.value : "";
+  if(!cat) { toast("請先選擇類別","red"); return; }
+  var name = prompt("在「"+cat+"」下新增子類別：");
+  if(!name || !name.trim()) return;
+  name = name.trim();
+  var cc3 = getCustomCats();
+  if(!cc3[cat]) cc3[cat] = [];
+  if(cc3[cat].indexOf(name)===-1) cc3[cat].push(name);
+  saveCustomCats(cc3);
+  // Update dropdown and select
+  var subSel = document.getElementById("imp-sub-"+idx);
+  if(subSel) {
+    var o = document.createElement("option"); o.value=name; o.textContent=name; o.selected=true;
+    subSel.appendChild(o);
+  }
+  window._pendingImport[idx].subcategory = name;
+  toast("✓ 已新增子類別："+name,"green");
+};
 
 function confirmImport(){
   const parsed=window._pendingImport||[];
