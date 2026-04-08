@@ -1702,15 +1702,40 @@ function getLastSync() {
   try { return localStorage.getItem("ai-finance-last-sync") || ""; } catch(e) { return ""; }
 }
 
-window.saveGistToken = function() {
+window.saveGistToken = async function() {
   var inp = document.getElementById("gist-token-input");
   var token = (inp ? inp.value : "").trim();
   if(!token) { toast("請輸入 GitHub Token", "red"); return; }
   if(!token.startsWith("ghp_") && !token.startsWith("github_pat_")) { toast("Token 格式不正確", "red"); return; }
   try { localStorage.setItem("ai-finance-gist-token", token); } catch(e) {}
   initSyncUI();
-  toast("✓ GitHub Token 已儲存", "green");
+  toast("✓ Token 已儲存，正在搜尋雲端資料...", "green");
+  // Auto-discover existing sync gist
+  await discoverGist(token);
 };
+
+async function discoverGist(token) {
+  var status = document.getElementById("sync-time");
+  if(status) status.textContent = "搜尋雲端資料中...";
+  try {
+    var resp = await fetch("https://api.github.com/gists?per_page=30", {
+      headers: { "Authorization": "token " + token }
+    });
+    if(!resp.ok) throw new Error("HTTP " + resp.status);
+    var gists = await resp.json();
+    for(var i = 0; i < gists.length; i++) {
+      if(gists[i].files && gists[i].files["finance_sync.json"]) {
+        try { localStorage.setItem("ai-finance-gist-id", gists[i].id); } catch(e) {}
+        if(status) status.textContent = "✓ 找到雲端資料！點「從雲端下載」同步";
+        toast("✓ 找到雲端同步資料，可以下載了", "green");
+        return;
+      }
+    }
+    if(status) status.textContent = "未找到雲端資料，請先在另一台裝置上傳";
+  } catch(e) {
+    if(status) status.textContent = "搜尋失敗：" + e.message;
+  }
+}
 
 window.disconnectGist = function() {
   if(!confirm("確定重新設定？Token 和 Gist ID 將被清除")) return;
@@ -1725,6 +1750,7 @@ window.disconnectGist = function() {
 
 function initSyncUI() {
   var token = getGistToken();
+  var gistId = getGistId();
   var setup = document.getElementById("sync-setup");
   var connected = document.getElementById("sync-connected");
   var status = document.getElementById("sync-status");
@@ -1737,6 +1763,8 @@ function initSyncUI() {
     var ls = getLastSync();
     if(timeEl) timeEl.textContent = ls ? "上次同步：" + ls : "尚未同步";
     if(sidebar) sidebar.innerHTML = "☁️ <span style='color:var(--teal)'>已連結</span>";
+    // Auto-discover gist if token set but no gist ID
+    if(!gistId) discoverGist(token);
   } else {
     if(status) status.innerHTML = "<span style='color:var(--tx3)'>○ 未連結</span>";
     if(sidebar) sidebar.innerHTML = "";
@@ -1814,9 +1842,14 @@ window.gistDownload = async function() {
   var token = getGistToken();
   if(!token) { toast("請先設定 GitHub Token", "red"); return; }
   var gistId = getGistId();
-  if(!gistId) { toast("尚未上傳過資料，請先上傳", "red"); return; }
   var btn = event.target; if(btn) { btn.disabled = true; btn.textContent = "下載中..."; }
   try {
+    // Auto-discover if no gist ID
+    if(!gistId) {
+      await discoverGist(token);
+      gistId = getGistId();
+      if(!gistId) { toast("找不到雲端同步資料，請先在另一台裝置上傳", "red"); return; }
+    }
     var resp = await fetch("https://api.github.com/gists/" + gistId, {
       headers: { "Authorization": "token " + token }
     });
