@@ -131,6 +131,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
     <div class="nav-bottom">
       <div style="color:var(--tx3);font-size:11px;line-height:1.9">
         📊 已載入 <span id="total-count" style="color:var(--gold)">0</span> 筆
+        <div id="sidebar-sync" style="font-size:10px"></div>
       </div>
     </div>
   </div>
@@ -253,10 +254,39 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       </div>
       <div class="divider"></div>
       <div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px"><div style="font-size:13px;font-weight:600;margin-bottom:3px">💾 資料備份 / 同步</div><div style="font-size:12px;color:var(--tx2)">匯出完整資料 → 備份或傳給其他裝置匯入</div></div>
+        <div style="flex:1;min-width:200px"><div style="font-size:13px;font-weight:600;margin-bottom:3px">💾 本機備份</div><div style="font-size:12px;color:var(--tx2)">匯出 JSON 檔案到電腦</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" onclick="exportRecords()" style="background:var(--teal);color:#080c14">⬇ 匯出資料</button>
           <label class="btn btn-ghost" style="cursor:pointer">⬆ 匯入資料<input type="file" accept=".json" onchange="importRecords(this)" style="display:none"></label>
+        </div>
+      </div>
+      <!-- Cloud Sync -->
+      <div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:18px 20px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:3px">☁️ 雲端同步</div>
+            <div style="font-size:12px;color:var(--tx2)">透過 GitHub Gist 跨裝置同步，手機電腦共用一份資料</div>
+          </div>
+          <div id="sync-status" style="font-size:11px;color:var(--tx3)"></div>
+        </div>
+        <div id="sync-panel">
+          <div id="sync-setup" style="display:none">
+            <div style="font-size:12px;color:var(--tx2);margin-bottom:10px;line-height:1.6">
+              首次設定：前往 <a href="https://github.com/settings/tokens/new?scopes=gist&description=智慧記帳同步" target="_blank" style="color:var(--gold)">GitHub → Settings → Tokens</a> 產生 Token（勾選 gist），貼入下方：
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="password" id="gist-token-input" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:8px 10px;border-radius:8px;font-size:12px;font-family:DM Mono,monospace;outline:none">
+              <button onclick="saveGistToken()" class="btn" style="padding:8px 14px;font-size:12px">連結</button>
+            </div>
+          </div>
+          <div id="sync-connected" style="display:none">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button onclick="gistUpload()" class="btn" style="padding:8px 16px;font-size:13px">☁️ 上傳到雲端</button>
+              <button onclick="gistDownload()" class="btn btn-ghost" style="padding:8px 16px;font-size:13px">⬇️ 從雲端下載</button>
+              <span id="sync-time" style="font-size:11px;color:var(--tx3);margin-left:4px"></span>
+              <button onclick="disconnectGist()" style="background:transparent;border:none;color:var(--tx3);cursor:pointer;font-size:11px;margin-left:auto">⚙️ 重新設定</button>
+            </div>
+          </div>
         </div>
       </div>
       <div style="margin-bottom:16px"><div style="font-size:15px;font-weight:600;margin-bottom:4px">已儲存的記錄</div><div style="color:var(--tx2);font-size:12px">儲存於本機 localStorage</div></div>
@@ -287,14 +317,14 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
 <div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.5)"><div id="edit-modal-content"></div></div>
 </div>
-<script type="application/json" id="cat-data">{"投資收入":["信用卡回饋","活存","股利","股票"],"餐飲食品":["Bar","Happy hours","MBA","下午茶","会员","午餐","咖啡","宵夜","早餐","晚餐","水","水果","花茶","食材","點心零嘴"],"秉鈞":["AA","秉鈞爸媽","請小陸費"],"服飾美容":["上衣","保養品","內衣","剪髮理容","包包","化妝品","外套","头皮按摩","帽子","指甲","按摩","泳衣","洋裝","睫毛","褲子","運動","配件","隱形眼鏡","鞋子","香水"],"運輸交通":["ubike","公車","包车","快遞","捷運","機車","火車","船","計程車","飛機","高鐵"],"居家生活":["健保","傢俱","家電用品","寢具","房租","打扫","水費","沐浴品","瓦斯費","生理用品","管理費","網路費","衛生紙","衣服送洗","運動用品","運費","電費","風水用品"],"休閒娛樂":["Club","KTV","Party","交友软体","人魚","劇本殺","密室逃脫","寬板滑水","小說","展覽","影視會員","拳擊","按摩","採海芋","旅行遊玩","書","棒球","派對","溜冰","溫泉","滑雪","演唱会","漫畫","潛水","狗飼料","玩具小物","瑜珈","畫畫","签证","算命","网球","花花","衝浪","貓貓","跑步","運動健身","鋼琴","電影","音樂劇","飯店","香氛","香氛蠟燭","高爾夫"],"一般收入":["公司獎金","公司薪資","其他","收取還款"],"教育學習":["Coursera","GMAT","GPT","MBA","人民幣","企查查","學雜費","文具","書","港幣","申请学校","禮君班費","補習費","證照","讀書會"],"人情交際":["婚喪喜慶","孝養父母","應酬交際","我愛密","毅熙","紅包","送禮請客","钱龙赞助"],"媽媽":["健保","生日禮物"],"其他":["保險","國民年金","慈善捐款","拜拜","行政罰鍰","證件換發","證件照片","隔離費用"],"購物退費":["儲值退款","公司報銷","網路消費"],"醫療保健":["心理諮商","整骨","旅遊保險","核酸檢驗","診所就醫","購買藥物","身體檢查","飯店隔離"],"支付紅利":["Line"],"禮金":["二伯父紅包","学费","投資小伙伴","比賽獎金","爸爸","男朋友红包","發票中獎","紅包"],"3C通訊":["充电","手機","相機","網盤","網路","耳機","電腦商品","電話費"],"圖書刊物":["書籍","漫畫"],"理財投資":["基金","换汇","股票"],"退稅":["五倍券","退稅"],"費用":["會員","繳稅"],"保顯理賠":["健康理賠"],"汽機車":["停車費"]}</script>
+<script type="application/json" id="cat-data">{"投資收入": ["信用卡回饋", "活存", "股利", "股票"], "餐飲食品": ["Bar", "Happy hours", "MBA", "下午茶", "会员", "午餐", "咖啡", "宵夜", "早餐", "晚餐", "水", "水果", "花茶", "食材", "點心零嘴"], "服飾美容": ["上衣", "保養品", "內衣", "剪髮理容", "包包", "化妝品", "外套", "头皮按摩", "帽子", "指甲", "按摩", "泳衣", "洋裝", "睫毛", "褲子", "運動", "配件", "隱形眼鏡", "鞋子", "香水"], "運輸交通": ["ubike", "公車", "包车", "快遞", "捷運", "機車", "火車", "船", "計程車", "飛機", "高鐵"], "居家生活": ["健保", "傢俱", "家電用品", "寢具", "房租", "打扫", "水費", "沐浴品", "瓦斯費", "生理用品", "管理費", "網路費", "衛生紙", "衣服送洗", "運動用品", "運費", "電費", "風水用品"], "休閒娛樂": ["Club", "KTV", "Party", "交友软体", "人魚", "劇本殺", "密室逃脫", "寬板滑水", "小說", "展覽", "影視會員", "拳擊", "按摩", "採海芋", "旅行遊玩", "書", "棒球", "派對", "溜冰", "溫泉", "滑雪", "演唱会", "漫畫", "潛水", "狗飼料", "玩具小物", "瑜珈", "畫畫", "签证", "算命", "网球", "花花", "衝浪", "貓貓", "跑步", "運動健身", "鋼琴", "電影", "音樂劇", "飯店", "香氛", "香氛蠟燭", "高爾夫"], "一般收入": ["公司獎金", "公司薪資", "其他", "收取還款"], "教育學習": ["Coursera", "GMAT", "GPT", "MBA", "人民幣", "企查查", "學雜費", "文具", "書", "港幣", "申请学校", "禮君班費", "補習費", "證照", "讀書會"], "人情交際": ["婚喪喜慶", "孝養父母", "應酬交際", "我愛密", "毅熙", "紅包", "送禮請客"], "媽媽": ["健保", "生日禮物"], "其他": ["保險", "國民年金", "慈善捐款", "拜拜", "行政罰鍰", "證件換發", "證件照片", "隔離費用"], "購物退費": ["儲值退款", "公司報銷", "網路消費"], "醫療保健": ["心理諮商", "整骨", "旅遊保險", "核酸檢驗", "診所就醫", "購買藥物", "身體檢查", "飯店隔離"], "支付紅利": ["Line"], "禮金": ["二伯父紅包", "学费", "投資小伙伴", "比賽獎金", "爸爸", "男朋友红包", "發票中獎", "紅包"], "3C通訊": ["充电", "手機", "相機", "網盤", "網路", "耳機", "電腦商品", "電話費"], "圖書刊物": ["書籍", "漫畫"], "理財投資": ["基金", "换汇", "股票"], "退稅": ["五倍券", "退稅"], "費用": ["會員", "繳稅"], "保顯理賠": ["健康理賠"], "汽機車": ["停車費"]}</script>
 <script>
 (function() {
 "use strict";
 
 // No embedded personal data - all data loaded from localStorage or user import
 const CATS = JSON.parse(document.getElementById("cat-data").textContent);
-const CC = {"餐飲食品":"#f0c060","運輸交通":"#4ecdc4","休閒娛樂":"#a78bfa","服飾美容":"#f9a8d4","居家生活":"#6ee7b7","投資收入":"#34d399","人情交際":"#fb923c","一般收入":"#86efac","3C通訊":"#7dd3fc","教育學習":"#c4b5fd","醫療保健":"#fda4af","禮金":"#fcd34d","其他":"#94a3b8","購物退費":"#d1fae5","費用":"#e5e7eb","秉鈞":"#a5f3fc","媽媽":"#fecdd3","理財投資":"#bef264","圖書刊物":"#d8b4fe","退稅":"#a7f3d0"};
+const CC = {"餐飲食品":"#f0c060","運輸交通":"#4ecdc4","休閒娛樂":"#a78bfa","服飾美容":"#f9a8d4","居家生活":"#6ee7b7","投資收入":"#34d399","人情交際":"#fb923c","一般收入":"#86efac","3C通訊":"#7dd3fc","教育學習":"#c4b5fd","醫療保健":"#fda4af","禮金":"#fcd34d","其他":"#94a3b8","購物退費":"#d1fae5","費用":"#e5e7eb","媽媽":"#fecdd3","理財投資":"#bef264","圖書刊物":"#d8b4fe","退稅":"#a7f3d0"};
 let INIT_TWD = 0; // Set by user in settings
 
 let FX={CNY:{"201807":4.52,"201901":4.38,"201902":4.37,"201903":4.42,"201904":4.45,"201905":4.38,"201906":4.31,"201907":4.30,"201908":4.25,"201909":4.24,"201910":4.26,"201911":4.30,"201912":4.30,"202001":4.27,"202002":4.24,"202005":4.17,"202006":4.21,"202007":4.19,"202008":4.19,"202009":4.25,"202010":4.32,"202012":4.38,"202101":4.39,"202102":4.43,"202103":4.45,"202104":4.48,"202105":4.45,"202106":4.50,"202107":4.48,"202108":4.46,"202205":4.24,"202208":4.17,"202211":4.09,"202303":4.28,"202304":4.26,"202305":4.24,"202306":4.24,"202307":4.25,"202308":4.19,"202309":4.19,"202310":4.21,"202311":4.23,"202312":4.23,"202401":4.30,"202402":4.33,"202403":4.38,"202404":4.41,"202405":4.38,"202406":4.37,"202407":4.37,"202408":4.29,"202409":4.33,"202410":4.40,"202411":4.38,"202412":4.42,"202501":4.43,"202502":4.40,"202503":4.38,"202504":4.19,"202505":4.04,"202506":4.12,"202507":4.05,"202508":4.12,"202509":4.21,"202510":4.28,"202511":4.32,"202512":4.35,"202601":4.37,"202602":4.38,"202603":4.39},HKD:{"201901":3.87,"201902":3.87,"201903":3.86,"201904":3.86,"201905":3.85,"201906":3.85,"201907":3.85,"201908":3.85,"201909":3.85,"201910":3.85,"201911":3.84,"201912":3.85,"202001":3.86,"202002":3.86,"202007":3.86,"202008":3.85,"202009":3.84,"202010":3.84,"202101":3.84,"202102":3.86,"202103":3.86,"202105":3.87,"202106":3.87,"202107":3.86,"202108":3.86,"202204":3.81,"202211":3.88,"202212":3.87,"202301":3.87,"202308":3.84},KRW:{"202211":0.0228,"202312":0.0231},JPY:{"202303":0.225,"202312":0.215,"202405":0.198},USD:{"202202":27.9,"202203":28.3,"202401":31.8,"202411":32.5},GBP:{"202111":37.8}};
@@ -467,6 +497,7 @@ function initUI(){
   document.querySelectorAll(".nav-item[data-page]").forEach(el=>el.addEventListener("click",()=>showPage(el.dataset.page)));
   renderOv();
   updateOcrModeLabel();
+  initSyncUI();
 }
 
 function getByY(y){return y==="all"?allData:allData.filter(r=>yr(r.d)===y);}
@@ -967,7 +998,7 @@ window.promptNewSub = function() {
 function updateQCats(){
   const t=($("q-type")||{}).value||"e";
   const ec=["餐飲食品","運輸交通","休閒娛樂","服飾美容","居家生活","人情交際","3C通訊","教育學習","醫療保健","其他","費用","購物退費"];
-  const ic=["一般收入","投資收入","禮金","購物退費","媽媽","秉鈞"];
+  const ic=["一般收入","投資收入","禮金","購物退費","媽媽"];
   var base = t==="i" ? ic.slice() : ec.slice();
   var cc = getCustomCats();
   for(var k in cc) { if(base.indexOf(k) === -1) base.push(k); }
@@ -1658,6 +1689,155 @@ window.openInitModal = function() {
   if(inp) inp.value = INIT_TWD || 0;
   const m = document.getElementById("init-twd-modal");
   if(m) m.style.display = "flex";
+};
+
+// ── GitHub Gist Cloud Sync ──
+function getGistToken() {
+  try { return localStorage.getItem("ai-finance-gist-token") || ""; } catch(e) { return ""; }
+}
+function getGistId() {
+  try { return localStorage.getItem("ai-finance-gist-id") || ""; } catch(e) { return ""; }
+}
+function getLastSync() {
+  try { return localStorage.getItem("ai-finance-last-sync") || ""; } catch(e) { return ""; }
+}
+
+window.saveGistToken = function() {
+  var inp = document.getElementById("gist-token-input");
+  var token = (inp ? inp.value : "").trim();
+  if(!token) { toast("請輸入 GitHub Token", "red"); return; }
+  if(!token.startsWith("ghp_") && !token.startsWith("github_pat_")) { toast("Token 格式不正確", "red"); return; }
+  try { localStorage.setItem("ai-finance-gist-token", token); } catch(e) {}
+  initSyncUI();
+  toast("✓ GitHub Token 已儲存", "green");
+};
+
+window.disconnectGist = function() {
+  if(!confirm("確定重新設定？Token 和 Gist ID 將被清除")) return;
+  try {
+    localStorage.removeItem("ai-finance-gist-token");
+    localStorage.removeItem("ai-finance-gist-id");
+    localStorage.removeItem("ai-finance-last-sync");
+  } catch(e) {}
+  initSyncUI();
+  toast("✓ 已清除同步設定", "green");
+};
+
+function initSyncUI() {
+  var token = getGistToken();
+  var setup = document.getElementById("sync-setup");
+  var connected = document.getElementById("sync-connected");
+  var status = document.getElementById("sync-status");
+  var timeEl = document.getElementById("sync-time");
+  var sidebar = document.getElementById("sidebar-sync");
+  if(setup) setup.style.display = token ? "none" : "block";
+  if(connected) connected.style.display = token ? "block" : "none";
+  if(token) {
+    if(status) status.innerHTML = "<span style='color:var(--teal)'>● 已連結</span>";
+    var ls = getLastSync();
+    if(timeEl) timeEl.textContent = ls ? "上次同步：" + ls : "尚未同步";
+    if(sidebar) sidebar.innerHTML = "☁️ <span style='color:var(--teal)'>已連結</span>";
+  } else {
+    if(status) status.innerHTML = "<span style='color:var(--tx3)'>○ 未連結</span>";
+    if(sidebar) sidebar.innerHTML = "";
+  }
+}
+
+function buildSyncPayload() {
+  return {
+    version: 2,
+    synced: new Date().toISOString(),
+    records: BASE_DATA.concat(newRec),
+    init_twd: INIT_TWD,
+    fx: FX,
+    custom_cats: getCustomCats(),
+    hidden_cats: getHiddenCats(),
+    merchant_map: getMerchantMappings()
+  };
+}
+
+function applySyncPayload(data) {
+  if(!data || !data.records) throw new Error("資料格式錯誤");
+  // Split into base + new (treat all as base for simplicity)
+  BASE_DATA = data.records;
+  newRec = [];
+  saveBase(); saveRec();
+  if(data.init_twd !== undefined) { INIT_TWD = data.init_twd; try{localStorage.setItem("ai-finance-init",INIT_TWD);}catch(e){} }
+  if(data.fx) { FX = data.fx; }
+  if(data.custom_cats) { try{localStorage.setItem("ai-finance-custom-cats",JSON.stringify(data.custom_cats));}catch(e){} }
+  if(data.hidden_cats) { saveHiddenCats(data.hidden_cats); }
+  if(data.merchant_map) { try{localStorage.setItem("ai-finance-merchant-map",JSON.stringify(data.merchant_map));}catch(e){} }
+  rebuildAllData();
+}
+
+window.gistUpload = async function() {
+  var token = getGistToken();
+  if(!token) { toast("請先設定 GitHub Token", "red"); return; }
+  var btn = event.target; if(btn) { btn.disabled = true; btn.textContent = "上傳中..."; }
+  try {
+    var payload = JSON.stringify(buildSyncPayload());
+    var gistId = getGistId();
+    var headers = { "Authorization": "token " + token, "Content-Type": "application/json" };
+    var body = JSON.stringify({
+      description: "智慧記帳同步資料",
+      public: false,
+      files: { "finance_sync.json": { content: payload } }
+    });
+
+    var resp;
+    if(gistId) {
+      // Update existing gist
+      resp = await fetch("https://api.github.com/gists/" + gistId, { method: "PATCH", headers: headers, body: body });
+    } else {
+      // Create new gist
+      resp = await fetch("https://api.github.com/gists", { method: "POST", headers: headers, body: body });
+    }
+    if(!resp.ok) {
+      var err = await resp.json().catch(function(){return {};});
+      throw new Error(err.message || "HTTP " + resp.status);
+    }
+    var result = await resp.json();
+    try { localStorage.setItem("ai-finance-gist-id", result.id); } catch(e) {}
+    var now = new Date().toLocaleString("zh-TW");
+    try { localStorage.setItem("ai-finance-last-sync", now); } catch(e) {}
+    var timeEl = document.getElementById("sync-time");
+    if(timeEl) timeEl.textContent = "上次同步：" + now;
+    toast("✓ 已上傳到雲端（" + BASE_DATA.concat(newRec).length + " 筆）", "green");
+  } catch(e) {
+    toast("❌ 上傳失敗：" + e.message, "red");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = "☁️ 上傳到雲端"; }
+  }
+};
+
+window.gistDownload = async function() {
+  var token = getGistToken();
+  if(!token) { toast("請先設定 GitHub Token", "red"); return; }
+  var gistId = getGistId();
+  if(!gistId) { toast("尚未上傳過資料，請先上傳", "red"); return; }
+  var btn = event.target; if(btn) { btn.disabled = true; btn.textContent = "下載中..."; }
+  try {
+    var resp = await fetch("https://api.github.com/gists/" + gistId, {
+      headers: { "Authorization": "token " + token }
+    });
+    if(!resp.ok) throw new Error("HTTP " + resp.status);
+    var result = await resp.json();
+    var file = result.files && result.files["finance_sync.json"];
+    if(!file) throw new Error("找不到同步檔案");
+    var data = JSON.parse(file.content);
+    if(!confirm("確定從雲端下載？將覆蓋本機所有資料\n（雲端共 " + (data.records||[]).length + " 筆，同步於 " + (data.synced||"?").substring(0,16) + "）")) return;
+    applySyncPayload(data);
+    var now = new Date().toLocaleString("zh-TW");
+    try { localStorage.setItem("ai-finance-last-sync", now); } catch(e) {}
+    var timeEl = document.getElementById("sync-time");
+    if(timeEl) timeEl.textContent = "上次同步：" + now;
+    initUI();
+    toast("✓ 已從雲端下載 " + allData.length + " 筆", "green");
+  } catch(e) {
+    toast("❌ 下載失敗：" + e.message, "red");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = "⬇️ 從雲端下載"; }
+  }
 };
 
 document.addEventListener("DOMContentLoaded",init);
