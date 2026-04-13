@@ -169,6 +169,10 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="page-sub">按年份查看月度收支，點擊月份跳至明細</div>
       <div class="yrsel" id="mth-years"></div>
       <div class="cr1"><div class="cbox"><div class="ctitle" id="mth-ctitle">年度月收支對比</div><div style="position:relative;height:220px"><canvas id="ch-mthd"></canvas></div></div></div>
+      <div class="cr">
+        <div class="cbox"><div class="ctitle">年度支出分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-cat"></canvas></div></div>
+        <div class="cbox"><div class="ctitle">年度收入分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-inc"></canvas></div></div>
+      </div>
       <div class="mtable">
         <div class="mrow hdr"><div>月份</div><div>支出</div><div>收入</div><div>淨餘</div><div>筆數</div></div>
         <div id="mth-list"></div>
@@ -544,6 +548,16 @@ function renderMth(){
   const maxE=Math.max(...mks.map(m=>md[m].e),1);
   const ml=$("mth-list");
   if(ml){ml.innerHTML=mks.map(m=>{const v=md[m],net=v.i-v.e,pct=Math.round(v.e/maxE*100);return '<div class="mrow" data-y="'+mthY+'" data-m="'+m+'"><div class="mono">'+mthY+"/"+m+'</div><div class="mono tgld">'+(v.e>0?fa(v.e):"-")+'<div class="barmini"><div class="barfill" style="width:'+pct+'%"></div></div></div><div class="mono tteal">'+(v.i>0?fa(v.i):"-")+'</div><div class="mono '+(net>=0?"tteal":"tred")+'">'+(v.e+v.i>0?(net>=0?"+":"")+Math.round(net).toLocaleString():"-")+'</div><div style="color:var(--tx3);font-size:11px">'+v.n+' 筆</div></div>';}).join("");ml.addEventListener("click",function(e){const row=e.target.closest(".mrow[data-y]");if(row)drillM(row.dataset.y,row.dataset.m);});}
+
+  // Expense category pie
+  const mthExp=data.filter(r=>r.t==="e"),mthCmap={};mthExp.forEach(r=>{mthCmap[r.c]=(mthCmap[r.c]||0)+toTWD(r);});
+  const mthCtop=Object.entries(mthCmap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  dc("mthcat");if($("ch-mth-cat"))ch["mthcat"]=new Chart($("ch-mth-cat"),{type:"doughnut",data:{labels:mthCtop.map(([k])=>k),datasets:[{data:mthCtop.map(([,v])=>Math.round(v)),backgroundColor:mthCtop.map(([k])=>CC[k]||"#64748b"),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()}}}}});
+
+  // Income category pie
+  const mthInc=data.filter(r=>r.t==="i"),mthImap={};mthInc.forEach(r=>{mthImap[r.c]=(mthImap[r.c]||0)+toTWD(r);});
+  const mthItop=Object.entries(mthImap).sort((a,b)=>b[1]-a[1]);
+  dc("mthinc");if($("ch-mth-inc"))ch["mthinc"]=new Chart($("ch-mth-inc"),{type:"doughnut",data:{labels:mthItop.map(([k])=>k),datasets:[{data:mthItop.map(([,v])=>Math.round(v)),backgroundColor:["#34d399","#4ecdc4","#86efac","#a7f3d0","#6ee7b7","#fcd34d"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()}}}}});
 }
 
 function drillM(y,m){const sy=$("s-year"),sm=$("s-month"),st=$("s-type"),sc=$("s-cat"),sq=$("s-q");if(sy)sy.value=y;if(sm)sm.value=m;if(st)st.value="e";if(sc)sc.value="";if(sq)sq.value="";showPage("records");}
