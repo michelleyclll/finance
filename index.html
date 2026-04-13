@@ -169,9 +169,10 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="page-sub">按年份查看月度收支，點擊月份跳至明細</div>
       <div class="yrsel" id="mth-years"></div>
       <div class="cr1"><div class="cbox"><div class="ctitle" id="mth-ctitle">年度月收支對比</div><div style="position:relative;height:220px"><canvas id="ch-mthd"></canvas></div></div></div>
+      <div class="yrsel" id="mth-months" style="margin-bottom:16px"></div>
       <div class="cr">
-        <div class="cbox"><div class="ctitle">年度支出分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-cat"></canvas></div></div>
-        <div class="cbox"><div class="ctitle">年度收入分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-inc"></canvas></div></div>
+        <div class="cbox"><div class="ctitle" id="mth-cat-title">年度支出分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-cat"></canvas></div></div>
+        <div class="cbox"><div class="ctitle" id="mth-inc-title">年度收入分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-inc"></canvas></div></div>
       </div>
       <div class="mtable">
         <div class="mrow hdr"><div>月份</div><div>支出</div><div>收入</div><div>淨餘</div><div>筆數</div></div>
@@ -335,7 +336,7 @@ let FX={CNY:{"201807":4.52,"201901":4.38,"201902":4.37,"201903":4.42,"201904":4.
 
 let BASE_DATA=[];
 let uploadedImages=[]; // loaded from localStorage
-let newRec=[],allData=[],filtered=[],dispN=60,ovY="all",mthY=String(new Date().getFullYear()),ch={};
+let newRec=[],allData=[],filtered=[],dispN=60,ovY="all",mthY=String(new Date().getFullYear()),mthM="all",ch={};
 
 // ── Merchant → Category auto-learning ──
 var _merchantMap = null; // cached
@@ -493,7 +494,7 @@ function initUI(){
 
   const years=[...new Set(allData.map(r=>yr(r.d)))].sort();
   const ovEl=$("ov-years");if(ovEl){ovEl.innerHTML="";mkYrBtn("全部","all",true,ovEl,v=>{ovY=v;renderOv();});years.forEach(y=>mkYrBtn(y,y,false,ovEl,v=>{ovY=v;renderOv();}));}
-  const mthEl=$("mth-years");if(mthEl){mthEl.innerHTML="";years.forEach(y=>mkYrBtn(y,y,y===mthY,mthEl,v=>{mthY=v;renderMth();}));}
+  const mthEl=$("mth-years");if(mthEl){mthEl.innerHTML="";years.forEach(y=>mkYrBtn(y,y,y===mthY,mthEl,v=>{mthY=v;mthM="all";renderMth();}));}
   const catSel=$("s-cat");if(catSel){catSel.innerHTML='<option value="">全部類別</option>';sortByFreq([...new Set(allData.map(r=>r.c))], getCatFreq()).forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;catSel.appendChild(o);});}
   const yrSel=$("s-year");if(yrSel){yrSel.innerHTML='<option value="">全部年份</option>';years.forEach(y=>{const o=document.createElement("option");o.value=y;o.textContent=y;yrSel.appendChild(o);});}
   updateQCats();const qd=$("q-date");if(qd)qd.valueAsDate=new Date();
@@ -545,9 +546,34 @@ function renderMth(){
   data.filter(r=>r.t==="i").forEach(r=>{md[mo(r.d)].i+=toTWD(r);});
   const labs=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],mks=["01","02","03","04","05","06","07","08","09","10","11","12"];
   dc("mthd");ch["mthd"]=new Chart($("ch-mthd"),{type:"bar",data:{labels:labs,datasets:[{label:"支出",data:mks.map(m=>Math.round(md[m].e)),backgroundColor:"rgba(240,192,96,0.7)",borderColor:"#f0c060",borderWidth:1,borderRadius:3},{label:"收入",data:mks.map(m=>Math.round(md[m].i)),backgroundColor:"rgba(78,205,196,0.6)",borderColor:"#4ecdc4",borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#8892a4",font:{size:11}}},tooltip:{callbacks:{label:c=>c.dataset.label+": NT$"+c.raw.toLocaleString()}}},scales:{x:{ticks:{color:"#8892a4",font:{size:11}},grid:{color:"rgba(255,255,255,0.04)"}},y:{ticks:{color:"#4a5568",font:{size:9},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,0.04)"}}}}});
+
+  // Month selector buttons
+  const mmEl=$("mth-months");
+  if(mmEl){
+    mmEl.innerHTML="";
+    mkYrBtn("全年","all",mthM==="all",mmEl,function(v){mthM=v;renderMthPies();});
+    mks.forEach(function(m,i){
+      // Only show months that have data
+      if(md[m].e>0||md[m].i>0) mkYrBtn((i+1)+"月",m,mthM===m,mmEl,function(v){mthM=v;renderMthPies();});
+    });
+  }
+
   const maxE=Math.max(...mks.map(m=>md[m].e),1);
   const ml=$("mth-list");
   if(ml){ml.innerHTML=mks.map(m=>{const v=md[m],net=v.i-v.e,pct=Math.round(v.e/maxE*100);return '<div class="mrow" data-y="'+mthY+'" data-m="'+m+'"><div class="mono">'+mthY+"/"+m+'</div><div class="mono tgld">'+(v.e>0?fa(v.e):"-")+'<div class="barmini"><div class="barfill" style="width:'+pct+'%"></div></div></div><div class="mono tteal">'+(v.i>0?fa(v.i):"-")+'</div><div class="mono '+(net>=0?"tteal":"tred")+'">'+(v.e+v.i>0?(net>=0?"+":"")+Math.round(net).toLocaleString():"-")+'</div><div style="color:var(--tx3);font-size:11px">'+v.n+' 筆</div></div>';}).join("");ml.addEventListener("click",function(e){const row=e.target.closest(".mrow[data-y]");if(row)drillM(row.dataset.y,row.dataset.m);});}
+
+  renderMthPies();
+}
+
+function renderMthPies(){
+  var data=allData.filter(r=>yr(r.d)===mthY);
+  var label=mthY+" 年";
+  if(mthM!=="all"){
+    data=data.filter(r=>mo(r.d)===mthM);
+    label=mthY+" 年 "+parseInt(mthM)+" 月";
+  }
+  setEl("mth-cat-title",label+" 支出分類");
+  setEl("mth-inc-title",label+" 收入分類");
 
   // Expense category pie
   const mthExp=data.filter(r=>r.t==="e"),mthCmap={};mthExp.forEach(r=>{mthCmap[r.c]=(mthCmap[r.c]||0)+toTWD(r);});
