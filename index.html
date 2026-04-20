@@ -197,7 +197,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="tlist">
         <div class="thead"><div>日期</div><div>類別 / 子類別</div><div>帳戶 / 幣別</div><div>備註</div><div style="text-align:right">金額</div></div>
         <div id="rec-list"></div>
-        <div class="loadmore" id="load-more">載入更多 ↓</div>
+        <div id="rec-pager" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 16px;border-top:1px solid var(--bd);flex-wrap:wrap"></div>
       </div>
     </div>
     <!-- IMPORT -->
@@ -336,7 +336,7 @@ let FX={CNY:{"201807":4.52,"201901":4.38,"201902":4.37,"201903":4.42,"201904":4.
 
 let BASE_DATA=[];
 let uploadedImages=[]; // loaded from localStorage
-let newRec=[],allData=[],filtered=[],dispN=60,ovY="all",mthY=String(new Date().getFullYear()),mthM="all",ch={};
+let newRec=[],allData=[],filtered=[],recPage=1,recPerPage=50,ovY="all",mthY=String(new Date().getFullYear()),mthM="all",ch={};
 
 // ── Merchant → Category auto-learning ──
 var _merchantMap = null; // cached
@@ -579,7 +579,7 @@ function initUI(){
   const catSel=$("s-cat");if(catSel){catSel.innerHTML='<option value="">全部類別</option>';sortByFreq([...new Set(allData.map(r=>r.c))], getCatFreq()).forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;catSel.appendChild(o);});}
   const yrSel=$("s-year");if(yrSel){yrSel.innerHTML='<option value="">全部年份</option>';years.forEach(y=>{const o=document.createElement("option");o.value=y;o.textContent=y;yrSel.appendChild(o);});}
   updateQCats();const qd=$("q-date");if(qd)qd.valueAsDate=new Date();
-  [["s-q","input",renderRec],["s-type","change",renderRec],["s-cat","change",renderRec],["s-year","change",renderRec],["s-month","change",renderRec],["load-more","click",()=>{dispN+=60;renderList();}],["btn-add","click",()=>showPage("import")],["parse-btn","click",parseText],["clear-btn","click",()=>{const t=$("import-txt");if(t)t.value="";}],["q-add-btn","click",quickAdd],["q-type","change",updateQCats],["q-cat","change",updateQSubs]].forEach(([id,ev,fn])=>{const el=$(id);if(el)el.addEventListener(ev,fn);});
+  [["s-q","input",renderRec],["s-type","change",renderRec],["s-cat","change",renderRec],["s-year","change",renderRec],["s-month","change",renderRec],["btn-add","click",()=>showPage("import")],["parse-btn","click",parseText],["clear-btn","click",()=>{const t=$("import-txt");if(t)t.value="";}],["q-add-btn","click",quickAdd],["q-type","change",updateQCats],["q-cat","change",updateQSubs]].forEach(([id,ev,fn])=>{const el=$(id);if(el)el.addEventListener(ev,fn);});
   document.querySelectorAll(".nav-item[data-page]").forEach(el=>el.addEventListener("click",()=>showPage(el.dataset.page)));
   renderOv();
   updateOcrModeLabel();
@@ -672,21 +672,61 @@ function drillM(y,m){const sy=$("s-year"),sm=$("s-month"),st=$("s-type"),sc=$("s
 function renderRec(){
   const q=(($("s-q")||{}).value||"").toLowerCase(),tp=($("s-type")||{}).value||"",cat=($("s-cat")||{}).value||"",year=($("s-year")||{}).value||"",month=($("s-month")||{}).value||"";
   filtered=allData.filter(r=>{if(tp&&r.t!==tp)return false;if(cat&&r.c!==cat)return false;if(year&&yr(r.d)!==year)return false;if(month&&mo(r.d)!==month)return false;if(q){const s=[r.c,r.s||"",r.n||"",r.m||"",r.f||"",r.o||"",r.cur||""].join(" ").toLowerCase();if(!s.includes(q))return false;}return true;}).sort((a,b)=>b.d.localeCompare(a.d));
-  dispN=60;renderList();
+  recPage=1;renderList();
 }
 
 function renderList(){
-  setEl("rec-count",filtered.length.toLocaleString()+" 筆");
+  var total=filtered.length;
+  var totalPages=Math.max(1,Math.ceil(total/recPerPage));
+  if(recPage>totalPages)recPage=totalPages;
+  if(recPage<1)recPage=1;
+  var start=(recPage-1)*recPerPage, end=Math.min(start+recPerPage,total);
+
+  setEl("rec-count",total.toLocaleString()+" 筆");
   const rl=$("rec-list");if(!rl)return;
-  rl.innerHTML=filtered.slice(0,dispN).map((r,i)=>{
+  rl.innerHTML=filtered.slice(start,end).map((r,i)=>{
+    var gi=start+i; // global index in filtered
     const col=CC[r.c]||"#64748b",tc=r.t==="e"?"exp":r.t==="i"?"inc":"xfr",sign=r.t==="e"?"- ":"+ ";
     const isFX=r.cur&&r.cur!=="TWD",twd=toTWD(r);
     const amtHTML=isFX?"<div style='font-size:10px;color:var(--tx3)'>"+fmtOrig(r)+"</div><div>≈ NT$ "+Math.round(twd).toLocaleString()+"</div>":"NT$ "+r.a.toLocaleString("zh-TW",{maximumFractionDigits:0});
     const curTag=isFX?"<span style='font-size:10px;background:rgba(167,139,250,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px;margin-left:4px'>"+r.cur+"</span>":"";
-    return '<div class="trow" onclick="openEdit('+i+')"><div class="tdate">'+fd(r.d)+'</div><div class="tcat"><span class="dot" style="background:'+col+'"></span><div><div>'+r.c+'</div><div class="tsub">'+(r.s||"")+'</div></div></div><div class="tacct">'+(r.t==="e"?(r.f||""):r.t==="i"?(r.o||""):(r.f||"")+"→"+(r.o||""))+curTag+'</div><div class="tnote">'+(r.n||r.m||"")+'</div><div class="tamt '+tc+'">'+sign+amtHTML+'</div></div>';
+    return '<div class="trow" onclick="openEdit('+gi+')"><div class="tdate">'+fd(r.d)+'</div><div class="tcat"><span class="dot" style="background:'+col+'"></span><div><div>'+r.c+'</div><div class="tsub">'+(r.s||"")+'</div></div></div><div class="tacct">'+(r.t==="e"?(r.f||""):r.t==="i"?(r.o||""):(r.f||"")+"→"+(r.o||""))+curTag+'</div><div class="tnote">'+(r.n||r.m||"")+'</div><div class="tamt '+tc+'">'+sign+amtHTML+'</div></div>';
   }).join("");
-  const lb=$("load-more");if(lb){lb.style.display=dispN>=filtered.length?"none":"block";if(dispN<filtered.length)lb.textContent="載入更多（還有"+(filtered.length-dispN)+"筆）↓";}
+
+  // Pagination controls
+  var pg=$("rec-pager");if(!pg)return;
+  if(totalPages<=1){pg.innerHTML="";return;}
+  var pbtn=function(label,page,disabled,active){
+    return "<button onclick='goRecPage("+page+")' style='background:"+(active?"var(--gold)":"var(--s1)")+";color:"+(active?"#080c14":"var(--tx2)")+";border:1px solid "+(active?"var(--gold)":"var(--bd)")+";padding:5px 10px;border-radius:6px;cursor:"+(disabled?"not-allowed":"pointer")+";font-size:12px;font-family:DM Sans,sans-serif;opacity:"+(disabled?"0.4":"1")+"'"+(disabled?" disabled":"")+">"+label+"</button>";
+  };
+  var h="";
+  h+=pbtn("«",1,recPage===1,false);
+  h+=pbtn("‹",recPage-1,recPage===1,false);
+  // Show nearby page numbers
+  var startP=Math.max(1,recPage-2),endP=Math.min(totalPages,recPage+2);
+  if(startP>1)h+="<span style='color:var(--tx3);font-size:11px'>...</span>";
+  for(var p=startP;p<=endP;p++) h+=pbtn(p,p,false,p===recPage);
+  if(endP<totalPages)h+="<span style='color:var(--tx3);font-size:11px'>...</span>";
+  h+=pbtn("›",recPage+1,recPage===totalPages,false);
+  h+=pbtn("»",totalPages,recPage===totalPages,false);
+  // Jump controls
+  h+="<span style='color:var(--tx3);font-size:11px;margin-left:8px'>"+recPage+"/"+totalPages+"</span>";
+  h+="<input id='rec-page-input' type='number' min='1' max='"+totalPages+"' value='"+recPage+"' style='width:48px;background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:4px 6px;border-radius:6px;font-size:12px;text-align:center;outline:none' onkeydown='if(event.key===\"Enter\")goRecPageInput()'>";
+  h+="<button onclick='goRecPageInput()' style='background:var(--s1);border:1px solid var(--bd);color:var(--tx2);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px'>跳轉</button>";
+  pg.innerHTML=h;
 }
+
+window.goRecPage=function(p){
+  var totalPages=Math.max(1,Math.ceil(filtered.length/recPerPage));
+  recPage=Math.max(1,Math.min(p,totalPages));
+  renderList();
+  // Scroll to top of records
+  var rl=$("rec-list");if(rl)rl.scrollIntoView({behavior:"smooth",block:"start"});
+};
+window.goRecPageInput=function(){
+  var inp=document.getElementById("rec-page-input");
+  if(inp)goRecPage(parseInt(inp.value)||1);
+};
 
 // ── TEXT PARSE (rule-based, offline) ──
 function parseText(){
@@ -817,41 +857,82 @@ function ruleBasedParse(txt){
 
 function showParsedResult(parsed){
   const res=$("ai-res");if(!res)return;
-  // Build category list for dropdowns
+  window._pendingImport=parsed;
+  renderImportPreview();
+}
+
+function renderImportPreview(){
+  var parsed=window._pendingImport;if(!parsed||!parsed.length)return;
+  var res=$("ai-res");if(!res)return;
   var allCatSet={};allData.forEach(function(x){allCatSet[x.c]=1;});
   var cc2=getCustomCats();for(var ck2 in cc2)allCatSet[ck2]=1;for(var bk2 in CATS)allCatSet[bk2]=1;
   var catList=filterHidden(sortByFreq(Object.keys(allCatSet), getCatFreq()));
   var allC=getAllCats();
+  var curList=["TWD","CNY","HKD","USD","JPY","KRW","EUR","SGD","AUD","THB","GBP"];
 
-  let h="<div style='margin-top:14px;margin-bottom:8px;font-size:12px;color:var(--teal)'>✓ 解析成功，共 "+parsed.length+" 筆（可直接修改分類 / 子類別）：</div>";
+  var h="<div style='margin-top:14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px'>"
+    +"<span style='font-size:12px;color:var(--teal)'>\u2713 \u89e3\u6790\u6210\u529f\uff0c\u5171 "+parsed.length+" \u7b46</span>"
+    +"<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap'>"
+    +"<label style='font-size:11px;color:var(--tx2);cursor:pointer;display:flex;align-items:center;gap:3px'><input type='checkbox' id='imp-sel-all' onchange='impSelAll(this.checked)'> \u5168\u9078</label>"
+    +"<select id='imp-batch-cur' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;outline:none'>"+curList.map(function(c){return"<option>"+c+"</option>";}).join("")+"</select>"
+    +"<button onclick='impBatchCur()' class='btn btn-ghost' style='padding:2px 8px;font-size:11px'>\u6279\u91cf\u6539\u5e63\u5225</button>"
+    +"<button onclick='impDelSel()' style='background:transparent;border:1px solid rgba(255,107,107,0.3);color:var(--red);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:11px'>\u522a\u9664\u52fe\u9078</button>"
+    +"</div></div>";
+
   parsed.forEach(function(r, idx) {
-    var isFX = r.currency && r.currency !== "TWD";
     var catOpts = catList.map(function(c){ return "<option"+(c===r.category?" selected":"")+">"+c+"</option>"; }).join("");
     if(catList.indexOf(r.category)===-1) catOpts += "<option selected>"+r.category+"</option>";
-
-    // Build subcategory options for current category (sorted by frequency)
     var subs = sortByFreq(allC[r.category] || [], getSubFreq(r.category));
-    var subOpts = '<option value="">—</option>' + subs.map(function(s){ return "<option"+(s===r.subcategory?" selected":"")+">"+s+"</option>"; }).join("");
+    var subOpts = '<option value="">\u2014</option>' + subs.map(function(s){ return "<option"+(s===r.subcategory?" selected":"")+">"+s+"</option>"; }).join("");
     if(r.subcategory && subs.indexOf(r.subcategory)===-1) subOpts += "<option selected>"+r.subcategory+"</option>";
-
-    h += "<div class='isrow' style='display:flex;flex-wrap:wrap;align-items:center;gap:5px'>"
-      + "<span style='color:var(--tx2);font-family:DM Mono,monospace;font-size:11px'>"+r.date+"</span>"
-      + " <span class='tag "+(r.type==="income"?"inc":"exp")+"'>"+(r.type==="income"?"收入":"支出")+"</span>"
-      + (isFX?" <span style='font-size:10px;background:rgba(167,139,250,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px'>"+r.currency+"</span>":"")
-      + " <strong style='margin:0 3px;font-size:13px'>"+Number(r.amount).toLocaleString()+"</strong>"
-      + "<select id='imp-cat-"+idx+"' onchange='updateImpRow("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:100px'>"+catOpts+"</select>"
-      + "<select id='imp-sub-"+idx+"' onchange='updateImpSub("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 6px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:90px'>"+subOpts+"</select>"
-      + "<span onclick='addImpSub("+idx+")' style='cursor:pointer;color:var(--gold);font-size:10px;flex-shrink:0'>＋</span>"
-      + (r.note?" <span class='tag' style='max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+r.note+"</span>":"")
-      + "</div>";
+    var curTag = r.currency&&r.currency!=="TWD" ? "<span style='font-size:10px;background:rgba(167,139,250,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px'>"+r.currency+"</span>" : "<span style='font-size:10px;color:var(--tx3)'>TWD</span>";
+    h += "<div class='isrow' style='display:flex;flex-wrap:wrap;align-items:center;gap:4px'>"
+      +"<input type='checkbox' class='imp-chk' data-idx='"+idx+"' style='margin-right:2px'>"
+      +"<span style='color:var(--tx2);font-family:DM Mono,monospace;font-size:11px'>"+r.date+"</span>"
+      +" <span class='tag "+(r.type==="income"?"inc":"exp")+"'>"+(r.type==="income"?"\u6536\u5165":"\u652f\u51fa")+"</span>"
+      +" "+curTag
+      +" <strong style='margin:0 2px;font-size:13px'>"+Number(r.amount).toLocaleString()+"</strong>"
+      +"<select id='imp-cat-"+idx+"' onchange='updateImpRow("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 5px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:95px'>"+catOpts+"</select>"
+      +"<select id='imp-sub-"+idx+"' onchange='updateImpSub("+idx+")' style='background:var(--s2);border:1px solid var(--bd);color:var(--tx);padding:2px 5px;border-radius:5px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;max-width:85px'>"+subOpts+"</select>"
+      +"<span onclick='addImpSub("+idx+")' style='cursor:pointer;color:var(--gold);font-size:10px'>\uff0b</span>"
+      +(r.note?" <span class='tag' style='max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+r.note+"</span>":"")
+      +"<span onclick='impDelOne("+idx+")' style='cursor:pointer;color:var(--red);font-size:14px;margin-left:auto;padding:0 4px'>\u00d7</span>"
+      +"</div>";
   });
-  window._pendingImport=parsed;
-  h+="<div style='margin-top:12px;display:flex;gap:8px'><button class='btn' id='confirm-btn'>✓ 確認匯入</button><button class='btn btn-ghost' id='cancel-btn'>取消</button></div>";
+  h+="<div style='margin-top:12px;display:flex;gap:8px'><button class='btn' id='confirm-btn'>\u2713 \u78ba\u8a8d\u532f\u5165 ("+parsed.length+" \u7b46)</button><button class='btn btn-ghost' id='cancel-btn'>\u53d6\u6d88</button></div>";
   res.innerHTML=h;
-  const cb=$("confirm-btn"),xb=$("cancel-btn");
-  if(cb)cb.addEventListener("click",confirmImport);
-  if(xb)xb.addEventListener("click",()=>{res.innerHTML="";});
+  $("confirm-btn").addEventListener("click",confirmImport);
+  $("cancel-btn").addEventListener("click",function(){res.innerHTML="";});
 }
+
+window.impDelOne = function(idx) {
+  window._pendingImport.splice(idx, 1);
+  if(window._pendingImport.length === 0) { $("ai-res").innerHTML = ""; return; }
+  renderImportPreview();
+};
+window.impDelSel = function() {
+  var chks = document.querySelectorAll(".imp-chk:checked");
+  if(!chks.length) { toast("\u8acb\u5148\u52fe\u9078\u8981\u522a\u9664\u7684\u9805\u76ee","red"); return; }
+  var idxs = [];
+  chks.forEach(function(c){ idxs.push(parseInt(c.dataset.idx)); });
+  idxs.sort(function(a,b){return b-a;});
+  idxs.forEach(function(i){ window._pendingImport.splice(i,1); });
+  if(window._pendingImport.length === 0) { $("ai-res").innerHTML = ""; toast("\u5df2\u6e05\u9664\u5168\u90e8","green"); return; }
+  renderImportPreview();
+  toast("\u2713 \u5df2\u522a\u9664 "+idxs.length+" \u7b46","green");
+};
+window.impSelAll = function(checked) {
+  document.querySelectorAll(".imp-chk").forEach(function(c){ c.checked = checked; });
+};
+window.impBatchCur = function() {
+  var sel = document.getElementById("imp-batch-cur");
+  var cur = sel ? sel.value : "TWD";
+  var chks = document.querySelectorAll(".imp-chk:checked");
+  if(!chks.length) { toast("\u8acb\u5148\u52fe\u9078\u8981\u4fee\u6539\u7684\u9805\u76ee","red"); return; }
+  chks.forEach(function(c){ window._pendingImport[parseInt(c.dataset.idx)].currency = cur; });
+  renderImportPreview();
+  toast("\u2713 \u5df2\u5c07 "+chks.length+" \u7b46\u6539\u70ba "+cur,"green");
+};
 
 // When category dropdown changes → update subcategory dropdown
 window.updateImpRow = function(idx) {
