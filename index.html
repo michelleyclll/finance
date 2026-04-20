@@ -376,14 +376,95 @@ function lookupMerchant(note) {
   if(!note || note.length < 2) return null;
   var map = buildMerchantMap();
   var key = note.toLowerCase().replace(/\s+/g, "");
-  // Exact match
   if(map[key]) return map[key];
-  // Substring match: check if any known merchant is contained in note
   for(var mk in map) {
     if(mk.length >= 3 && key.indexOf(mk) !== -1) return map[mk];
     if(key.length >= 3 && mk.indexOf(key) !== -1) return map[mk];
   }
   return null;
+}
+
+// ── Auto subcategory inference ──
+function inferSubcategory(note, category, timeHint) {
+  // If merchant map already has subcategory, use it
+  var m = lookupMerchant(note);
+  if(m && m.s) return m.s;
+
+  // For 餐飲食品: infer meal type from time
+  if(category === "餐飲食品") {
+    // Check for explicit subcategory keywords in note
+    if(/早餐|早点|豆浆|包子/.test(note)) return "早餐";
+    if(/午餐|午饭/.test(note)) return "午餐";
+    if(/晚餐|晚饭/.test(note)) return "晚餐";
+    if(/下午茶|奶茶|咖啡|coffee|cafe|tea|喜茶|甜品|蛋糕|茶楼/.test(note)) return "下午茶";
+    if(/宵夜/.test(note)) return "宵夜";
+    if(/零食|零嘴|薯片|饼干|巧克力|糖|烘焙/.test(note)) return "點心零嘴";
+    if(/水果|菜|食材|超市|山泉|矿泉|水$/.test(note)) return "食材";
+    if(/麦当劳|麦当勞|KFC|肯德基|汉堡|漢堡/.test(note)) {
+      // Fast food: infer from time
+    }
+    // Time-based inference
+    var hour = parseTimeHint(timeHint || note);
+    if(hour !== null) {
+      if(hour >= 5 && hour < 10) return "早餐";
+      if(hour >= 10 && hour < 14) return "午餐";
+      if(hour >= 14 && hour < 17) return "下午茶";
+      if(hour >= 17 && hour < 21) return "晚餐";
+      if(hour >= 21 || hour < 5) return "宵夜";
+    }
+  }
+
+  // For 投資收入: infer from keywords
+  if(category === "投資收入") {
+    if(/余额宝|余額寶|收益|活存|利息/.test(note)) return "活存";
+    if(/股利|分红/.test(note)) return "股利";
+    if(/基金/.test(note)) return "基金";
+  }
+
+  // For 運輸交通
+  if(category === "運輸交通") {
+    if(/哈啰|哈囉|单车|單車|摩拜|ubike/.test(note)) return "單車";
+    if(/滴滴|出租|计程|計程|taxi|uber/.test(note)) return "計程車";
+    if(/地铁|地鐵|捷運/.test(note)) return "捷運";
+    if(/高铁|高鐵/.test(note)) return "高鐵";
+    if(/火车|火車/.test(note)) return "火車";
+    if(/飞机|飛機|机票|機票|航空/.test(note)) return "飛機";
+  }
+
+  // For 3C通訊
+  if(category === "3C通訊") {
+    if(/话费|話費|充值|充值缴费|手机充值/.test(note)) return "電話費";
+    if(/会员|會員|订阅|訂閱|subscri/.test(note)) return "會員";
+  }
+
+  // For 理財投資
+  if(category === "理財投資") {
+    if(/换汇|換匯|兑换|兌換|货币/.test(note)) return "换汇";
+  }
+
+  return "";
+}
+
+function parseTimeHint(text) {
+  if(!text) return null;
+  // Match HH:MM patterns
+  var tm = text.match(/(\d{1,2}):(\d{2})/);
+  if(tm) return parseInt(tm[1]);
+  // Match "今天 HH:MM" or "昨天 HH:MM"
+  tm = text.match(/[今昨前]天\s*(\d{1,2}):(\d{2})/);
+  if(tm) return parseInt(tm[1]);
+  return null;
+}
+
+// Extract trailing subcategory hint from a text line (e.g. "商家名 -34.40 午餐")
+function extractTrailingSub(line) {
+  var knownSubs = ["早餐","午餐","晚餐","下午茶","宵夜","咖啡","食材","水","水果","點心零嘴",
+    "活存","股利","基金","换汇","電話費","單車","計程車","捷運","高鐵","火車","飛機","會員"];
+  for(var i = 0; i < knownSubs.length; i++) {
+    var re = new RegExp("\\s+" + knownSubs[i] + "\\s*$");
+    if(re.test(line)) return knownSubs[i];
+  }
+  return "";
 }
 
 function toTWD(r){if(!r.cur)return r.a;const tbl=FX[r.cur];if(!tbl)return r.a;const ym=r.d.substring(0,6);if(tbl[ym])return r.a*tbl[ym];const av=Object.keys(tbl).sort(),past=av.filter(m=>m<=ym);return r.a*(past.length?tbl[past[past.length-1]]:tbl[av[0]]||1);}
@@ -694,6 +775,9 @@ function ruleBasedParse(txt){
     const lineCur=guessCurrency(line)||globalCur;
 
     // Note: strip date, amounts, currency keywords, type keywords
+    // First check for trailing subcategory hint (e.g. "商家 -34.40 午餐")
+    var trailSub = extractTrailingSub(line);
+
     let note=line
       .replace(/\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/g,"")
       .replace(/\d{1,2}[\/\-]\d{1,2}/g,"")
@@ -701,9 +785,15 @@ function ruleBasedParse(txt){
       .replace(/CNY|TWD|HKD|USD|JPY|KRW|¥|\$|NT/g,"")
       .replace(/支出|收入|消費|付款|收款/g,"")
       .replace(/\s+/g," ").trim();
+    // Strip trailing subcategory from note
+    if(trailSub && note.endsWith(trailSub)) note = note.substring(0, note.length - trailSub.length).trim();
     if(note.length>60)note=note.substring(0,60);
 
-    results.push({date,amount,currency:lineCur,type,category:(lookupMerchant(note)||{}).c||guessCategory(line),subcategory:(lookupMerchant(note)||{}).s||"",note});
+    var merchant = lookupMerchant(note);
+    var cat = (merchant && merchant.c) || guessCategory(line);
+    var sub = trailSub || (merchant && merchant.s) || inferSubcategory(note, cat, line) || "";
+
+    results.push({date,amount,currency:lineCur,type,category:cat,subcategory:sub,note});
   }
 
   // If no results from line parsing, try blob parsing
@@ -1584,7 +1674,7 @@ function ocrTextParse(text) {
     ctx3 += note;
     var learned = lookupMerchant(note);
     var finalCat = learned ? learned.c : guessCat(ctx3);
-    var finalSub = learned ? learned.s : "";
+    var finalSub = (learned && learned.s) ? learned.s : inferSubcategory(note, finalCat, ctx3);
 
     results.push({ date:date, amount:amount, currency:lineCur, type:type, category:finalCat, subcategory:finalSub, note:note });
   }
