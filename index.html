@@ -148,7 +148,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
         <div class="card"><div class="card-lbl">本月支出</div><div class="card-val exp" id="c-mon">—</div><div class="card-sub" id="c-mon-l">—</div></div>
       </div>
       <div class="est-box">
-        <div class="est-col"><div class="est-lbl">Day 1 起始資產</div><div class="est-val" id="c-init-twd" style="color:var(--tx2)">NT$ 0</div><div style="font-size:11px;color:var(--tx3);margin-top:4px;cursor:pointer" onclick="openInitModal()">✏️ 修改</div></div>
+        <div class="est-col"><div class="est-lbl" id="c-init-lbl">Day 1 起始資產</div><div class="est-val" id="c-init-twd" style="color:var(--tx2)">NT$ 0</div><div style="font-size:11px;color:var(--tx3);margin-top:4px;cursor:pointer" onclick="openInitModal()">✏️ 修改 Day 1</div></div>
         <div class="est-sep">+</div>
         <div class="est-col"><div class="est-lbl">累積淨收支</div><div class="est-val" id="c-net-disp">—</div></div>
         <div class="est-sep">=</div>
@@ -386,24 +386,23 @@ function lookupMerchant(note) {
 
 // ── Auto subcategory inference ──
 function inferSubcategory(note, category, timeHint) {
-  // If merchant map already has subcategory, use it
   var m = lookupMerchant(note);
   if(m && m.s) return m.s;
 
-  // For 餐飲食品: infer meal type from time
+  // Strip suffix hints from note for cleaner matching (e.g. "滴滴出行 交通" → check "交通")
+  var suffixMatch = (note||"").match(/\s+(交通|健身|退款|轉帳|電費|充值|外卖|外賣)\s*$/);
+  var suffix = suffixMatch ? suffixMatch[1] : "";
+
   if(category === "餐飲食品") {
-    // Check for explicit subcategory keywords in note
-    if(/早餐|早点|豆浆|包子/.test(note)) return "早餐";
+    if(/早餐|早点|豆浆|包子|便利蜂/.test(note)) return "早餐";
     if(/午餐|午饭/.test(note)) return "午餐";
-    if(/晚餐|晚饭/.test(note)) return "晚餐";
-    if(/下午茶|奶茶|咖啡|coffee|cafe|tea|喜茶|甜品|蛋糕|茶楼/.test(note)) return "下午茶";
+    if(/晚餐|晚饭|茶馆|茶館/.test(note)) return "晚餐";
+    if(/下午茶|奶茶|咖啡|coffee|cafe|tea|喜茶|甜品|蛋糕|茶楼|茶樓|MARCOLINI|kurasu|TICLE|听刻/i.test(note)) return "下午茶";
     if(/宵夜/.test(note)) return "宵夜";
-    if(/零食|零嘴|薯片|饼干|巧克力|糖|烘焙/.test(note)) return "點心零嘴";
-    if(/水果|菜|食材|超市|山泉|矿泉|水$/.test(note)) return "食材";
-    if(/麦当劳|麦当勞|KFC|肯德基|汉堡|漢堡/.test(note)) {
-      // Fast food: infer from time
-    }
-    // Time-based inference
+    if(/零食|零嘴|薯片|饼干|巧克力|糖|烘焙|卡卡业/i.test(note)) return "點心零嘴";
+    if(/水果|菜|食材|超市|山泉|矿泉|盒马|农夫|光明|发酵乳|酸奶/i.test(note)) return "食材";
+    if(/水$|矿泉水|山泉/.test(note)) return "水";
+    if(/咖啡|coffee|永璞|COFFEE/i.test(note)) return "咖啡";
     var hour = parseTimeHint(timeHint || note);
     if(hour !== null) {
       if(hour >= 5 && hour < 10) return "早餐";
@@ -413,53 +412,57 @@ function inferSubcategory(note, category, timeHint) {
       if(hour >= 21 || hour < 5) return "宵夜";
     }
   }
-
-  // For 投資收入: infer from keywords
   if(category === "投資收入") {
-    if(/余额宝|余額寶|收益|活存|利息/.test(note)) return "活存";
-    if(/股利|分红/.test(note)) return "股利";
-    if(/基金/.test(note)) return "基金";
+    if(/余额宝|余額寶|收益|活存|利息/i.test(note)) return "活存";
+    if(/信用卡|回饋/i.test(note)) return "信用卡回饋";
+    if(/股利|分红/i.test(note)) return "股利";
+    if(/基金/i.test(note)) return "基金";
+    if(/股票/i.test(note)) return "股票";
   }
-
-  // For 運輸交通
   if(category === "運輸交通") {
-    if(/哈啰|哈囉|单车|單車|摩拜|ubike/.test(note)) return "單車";
-    if(/滴滴|出租|计程|計程|taxi|uber/.test(note)) return "計程車";
-    if(/地铁|地鐵|捷運/.test(note)) return "捷運";
-    if(/高铁|高鐵/.test(note)) return "高鐵";
-    if(/火车|火車/.test(note)) return "火車";
-    if(/飞机|飛機|机票|機票|航空/.test(note)) return "飛機";
+    if(/哈啰|哈囉|单车|單車|摩拜/i.test(note)) return "單車";
+    if(/滴滴|出租|计程|計程|taxi|uber/i.test(note)) return "計程車";
+    if(/地铁|地鐵|捷運/i.test(note)) return "捷運";
+    if(/高铁|高鐵/i.test(note)) return "高鐵";
+    if(/火车|火車/i.test(note)) return "火車";
+    if(/飞机|飛機|机票|機票|航空|空港|HANEDA|NARITA/i.test(note)) return "飛機";
+    if(/公車|公车|巴士/i.test(note)) return "公車";
+    if(/ubike/i.test(note)) return "ubike";
   }
-
-  // For 3C通訊
   if(category === "3C通訊") {
-    if(/话费|話費|充值|充值缴费|手机充值/.test(note)) return "電話費";
-    if(/会员|會員|订阅|訂閱|subscri/.test(note)) return "會員";
+    if(/话费|話費|充值|手机充值/i.test(note)) return "電話費";
+    if(/会员|會員|订阅|訂閱|subscri/i.test(note)) return "會員";
   }
-
-  // For 理財投資
   if(category === "理財投資") {
-    if(/换汇|換匯|兑换|兌換|货币/.test(note)) return "换汇";
+    if(/换汇|換匯|兑换|兌換|货币/i.test(note)) return "换汇";
   }
-
+  if(category === "休閒娛樂") {
+    if(/猩猩|健身|gym/i.test(note) || suffix==="健身") return "運動健身";
+    if(/绘画|画师|畫/i.test(note)) return "畫畫";
+    if(/游戏|遊戲|Jiwxc/i.test(note)) return "小說";
+  }
+  if(category === "居家生活") {
+    if(/电网|電費|电费/i.test(note) || suffix==="電費") return "電費";
+    if(/快递|物流|顺丰/i.test(note)) return "運費";
+  }
+  if(category === "人情交際") {
+    if(/红包|紅包/i.test(note)) return "紅包";
+    if(/转账|轉帳|转给/i.test(note)) return "送禮請客";
+  }
   return "";
 }
 
 function parseTimeHint(text) {
   if(!text) return null;
-  // Match HH:MM patterns
   var tm = text.match(/(\d{1,2}):(\d{2})/);
-  if(tm) return parseInt(tm[1]);
-  // Match "今天 HH:MM" or "昨天 HH:MM"
-  tm = text.match(/[今昨前]天\s*(\d{1,2}):(\d{2})/);
   if(tm) return parseInt(tm[1]);
   return null;
 }
 
-// Extract trailing subcategory hint from a text line (e.g. "商家名 -34.40 午餐")
 function extractTrailingSub(line) {
   var knownSubs = ["早餐","午餐","晚餐","下午茶","宵夜","咖啡","食材","水","水果","點心零嘴",
-    "活存","股利","基金","换汇","電話費","單車","計程車","捷運","高鐵","火車","飛機","會員"];
+    "活存","股利","基金","换汇","電話費","單車","計程車","捷運","高鐵","火車","飛機","會員",
+    "交通","健身","退款","轉帳","電費","充值","保養品","運動健身","信用卡回饋","紅包","送禮請客"];
   for(var i = 0; i < knownSubs.length; i++) {
     var re = new RegExp("\\s+" + knownSubs[i] + "\\s*$");
     if(re.test(line)) return knownSubs[i];
@@ -476,6 +479,25 @@ const fd=d=>d.substring(0,4)+"-"+d.substring(4,6)+"-"+d.substring(6,8);
 const fa=n=>"NT$ "+Math.round(n).toLocaleString("zh-TW");
 const dc=k=>{if(ch[k]){ch[k].destroy();delete ch[k];}};
 const $=id=>document.getElementById(id);
+
+// ── Shared category matching (used by both text and OCR parsers) ──
+const SHARED_CAT_MAP=[
+  [/余額寶|理財|基金|股票|理财|收益|利息|投資收入|分红|定期|投資理財/i,"投資收入"],
+  [/紅包|红包|AA|請客|送禮|轉帳|还款|借款|孝養|人情|转账|微信红包|来自/i,"人情交際"],
+  [/餐飲|美食|午餐|晚餐|早餐|咖啡|麥當勞|麦当劳|星巴克|肯德基|火鍋|外賣|外卖|餐厅|饭店|food|restaurant|美团|饿了么|海底捞|瑞幸|奶茶|烧烤|小吃|面包|便利店|盒马|全家|罗森|7-11|tabelog|foodbowl|超级碗|STARBUCKS|FAMILYMART|LAWSON|SUSHI|COFFEE|CAFE|RAMEN|便利蜂|喜茶|bagel|茶楼|茶馆|餐饮|麻辣|外卖订单|厨房|食品|农夫山泉|啵咔|怪人|FREAK|碗|MODEL|猩猩/i,"餐飲食品"],
+  [/滴滴|交通|地鐵|地铁|捷運|公車|巴士|計程|uber|taxi|高鐵|火車|飛機|机票|高速|停车|加油|出行|铁路|12306|航空|哈啰|哈囉|单车|單車|摩拜|trip\.com|booking|JR\s*EAST(?!\s*SHOP)|HANEDA|NARITA|空港|SUICA|PASMO/i,"運輸交通"],
+  [/娛樂|電影|KTV|遊戲|游戏|演唱|旅遊|旅行|酒店|飯店|hotel|airbnb|门票|景区|游乐|万达|猫眼|大麦|claude\.ai|subscri|訂閱|绘画|米画师/i,"休閒娛樂"],
+  [/服飾|衣|鞋|包|美容|美髮|護膚|化妝|优衣库|zara|h&m|nike|adidas|名创|屈臣氏|UNIQLO|GU\b|ABC.MART|MUJI|無印|免税店|免稅/i,"服飾美容"],
+  [/手機|電腦|3C|Apple|小米|华为|通訊|话费|充值|充值缴费|手机充值|通信|中国移动|中国联通|中国电信|iCloud|腾讯|视频|爱奇艺|bilibili|spotify|netflix|taiwan\s*mobile|BIC\s*CAMERA|YODOBASHI/i,"3C通訊"],
+  [/房租|水費|電費|瓦斯|網路|物業|家電|水电|燃气|暖气|快递|物流|顺丰|中通|菜鸟|拼多多|淘宝|京东|天猫|超市|DAISO|DON\s*QUIJOTE|驚安|百均|国家电网/i,"居家生活"],
+  [/薪資|薪水|工資|salary|bonus|獎金|工资|奖金|报销/i,"一般收入"],
+  [/醫療|醫院|藥|診所|保健|药店|挂号|体检|口腔|眼科|MATSUMOTO|COCOKARA|KUSURI|FUKUTARO|藥妝/i,"醫療保健"],
+  [/學費|補習|書|課程|教育|培训|网课|考试/i,"教育學習"],
+  [/MITSUKOSHI|三越|伊勢丹|ISETAN|GINZA\s*SIX|LUMINE|SHOPPING|東急|阪急|TAKASHIMAYA|高島屋|JR\s*EAST\s*SHOP|百貨/i,"購物退費"],
+  [/换汇|換匯|兑换|兌換|货币|聯合貨幣/i,"理財投資"],
+  [/轉帳|還款|借款/i,"人情交際"]
+];
+function sharedGuessCat(s){for(var i=0;i<SHARED_CAT_MAP.length;i++){if(SHARED_CAT_MAP[i][0].test(s))return SHARED_CAT_MAP[i][1];}return"其他";}
 
 function toast(msg,t){const el=$("toast");if(!el)return;el.textContent=msg;el.className="toast"+(t?" "+t:"");el.style.opacity="1";el.style.pointerEvents="auto";setTimeout(()=>{el.style.opacity="0";el.style.pointerEvents="none";},3000);}
 function setEl(id,val,col){const el=$(id);if(!el)return;el.textContent=val;if(col!==undefined)el.style.color=col;}
@@ -590,7 +612,16 @@ function getByY(y){return y==="all"?allData:allData.filter(r=>yr(r.d)===y);}
 
 function renderOv(){
   const data=getByY(ovY),exp=data.filter(r=>r.t==="e"),inc=data.filter(r=>r.t==="i");
-  const totE=exp.reduce((s,r)=>s+toTWD(r),0),totI=inc.reduce((s,r)=>s+toTWD(r),0),net=totI-totE,est=INIT_TWD+net;
+  const totE=exp.reduce((s,r)=>s+toTWD(r),0),totI=inc.reduce((s,r)=>s+toTWD(r),0),net=totI-totE;
+  // Calculate starting asset: INIT_TWD + net of all prior years
+  var startAsset=INIT_TWD;
+  var startLabel="Day 1 起始資產";
+  if(ovY!=="all"){
+    var priorNet=allData.filter(r=>yr(r.d)<ovY).reduce((s,r)=>s+(r.t==="i"?toTWD(r):r.t==="e"?-toTWD(r):0),0);
+    startAsset=INIT_TWD+priorNet;
+    startLabel=ovY+" 年初資產";
+  }
+  const est=startAsset+net;
   const now=new Date(),curM=now.getFullYear().toString()+String(now.getMonth()+1).padStart(2,"0");
   const monE=exp.filter(r=>yr(r.d)+mo(r.d)===curM).reduce((s,r)=>s+toTWD(r),0);
   setEl("c-inc",fa(totI));setEl("c-inc-n",inc.length.toLocaleString()+" 筆");
@@ -598,7 +629,8 @@ function renderOv(){
   setEl("c-net",fa(net),net>=0?"var(--teal)":"var(--red)");
   setEl("c-mon",fa(monE));setEl("c-mon-l",now.getFullYear()+"年"+(now.getMonth()+1)+"月");
   setEl("c-est",fa(est),est>=0?"var(--teal)":"var(--red)");
-  setEl("c-init-twd",fa(INIT_TWD),"var(--tx2)");
+  setEl("c-init-twd",fa(startAsset),"var(--tx2)");
+  var lblEl=$("c-init-lbl");if(lblEl)lblEl.textContent=startLabel;
   setEl("c-net-disp",(net>=0?"+":"")+fa(net),net>=0?"var(--teal)":"var(--red)");
   const sd=allData.map(r=>r.d).sort();
   if(sd.length)setEl("ov-sub",fd(sd[0])+" — "+fd(sd[sd.length-1])+" · "+allData.length.toLocaleString()+" 筆記錄");
@@ -752,22 +784,7 @@ function ruleBasedParse(txt){
   const today=new Date().toISOString().slice(0,10);
   const thisYear=new Date().getFullYear();
   const results=[];
-  const catMap=[
-    [/余額寶|理財|基金|股票|理财|收益|利息|投資收入/i,"投資收入"],
-    [/紅包|红包|AA|請客|送禮|轉帳|還款|借款|孝養|人情/i,"人情交際"],
-    [/餐飲|美食|午餐|晚餐|早餐|咖啡|麥當勞|星巴克|肯德基|火鍋|外賣|外卖|餐厅|饭店|food|restaurant|超级碗|foodbowl|STARBUCKS|FAMILYMART|LAWSON|SUSHI|COFFEE|CAFE|RAMEN|tabelog/i,"餐飲食品"],
-    [/滴滴|交通|地鐵|捷運|公車|巴士|計程|uber|taxi|高鐵|火車|飛機|机票|高速|trip\.com|JR\s*EAST(?!\s*SHOP)|HANEDA|NARITA|空港/i,"運輸交通"],
-    [/娛樂|電影|KTV|遊戲|演唱|旅遊|旅行|酒店|飯店|hotel|claude\.ai|subscri/i,"休閒娛樂"],
-    [/服飾|衣|鞋|包|美容|美髮|護膚|化妝|UNIQLO|GU\b/i,"服飾美容"],
-    [/手機|電腦|3C|Apple|小米|华为|通訊|话费|充值|会员|通信/i,"3C通訊"],
-    [/房租|水費|電費|瓦斯|網路|物業|超市|家電|DAISO/i,"居家生活"],
-    [/薪資|薪水|工資|salary|bonus|獎金/i,"一般收入"],
-    [/醫療|醫院|藥|診所|保健|MATSUMOTO|COCOKARA|KUSURI/i,"醫療保健"],
-    [/學費|補習|書|課程|教育/i,"教育學習"],
-    [/MITSUKOSHI|SHOPPING|JR\s*EAST\s*SHOP|百貨/i,"購物退費"],
-    [/轉帳|紅包|還款|借款/i,"人情交際"],
-  ];
-  function guessCategory(text){for(const [re,cat] of catMap){if(re.test(text))return cat;}return "其他";}
+  function guessCategory(text){return sharedGuessCat(text);}
   function guessCurrency(s){
     if(/CNY|人民幣/.test(s)&&!/TWD|台幣|NT/.test(s))return"CNY";
     if(/HKD|港幣|HK\$/.test(s))return"HKD";
@@ -815,9 +832,6 @@ function ruleBasedParse(txt){
     const lineCur=guessCurrency(line)||globalCur;
 
     // Note: strip date, amounts, currency keywords, type keywords
-    // First check for trailing subcategory hint (e.g. "商家 -34.40 午餐")
-    var trailSub = extractTrailingSub(line);
-
     let note=line
       .replace(/\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/g,"")
       .replace(/\d{1,2}[\/\-]\d{1,2}/g,"")
@@ -825,7 +839,8 @@ function ruleBasedParse(txt){
       .replace(/CNY|TWD|HKD|USD|JPY|KRW|¥|\$|NT/g,"")
       .replace(/支出|收入|消費|付款|收款/g,"")
       .replace(/\s+/g," ").trim();
-    // Strip trailing subcategory from note
+    // Check for trailing subcategory hint on both raw line and cleaned note
+    var trailSub = extractTrailingSub(line) || extractTrailingSub(note);
     if(trailSub && note.endsWith(trailSub)) note = note.substring(0, note.length - trailSub.length).trim();
     if(note.length>60)note=note.substring(0,60);
 
@@ -1578,21 +1593,7 @@ function ocrTextParse(text) {
   }
   function fmtD(y,m,d){ return y+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0"); }
 
-  var catMap = [
-    [/余額寶|理財|基金|股票|理财|收益|利息|投資收入|分红|定期|投資理財/i,"投資收入"],
-    [/紅包|红包|AA|請客|送禮|轉帳|还款|借款|孝養|人情|转账|微信红包|来自/i,"人情交際"],
-    [/餐飲|美食|午餐|晚餐|早餐|咖啡|麥當勞|麦当劳|星巴克|肯德基|火鍋|外賣|外卖|餐厅|饭店|food|restaurant|美团|饿了么|海底捞|瑞幸|奶茶|烧烤|小吃|面包|便利店|盒马|全家|罗森|7-11|tabelog|foodbowl|超级碗|STARBUCKS|FAMILYMART|LAWSON|SUSHI|RAMEN|COFFEE|CAFE|PORK|GYOZA|SOBA|UDON|YAKINIKU|IZAKAYA|BENTO|OGINOYA|KAMAMOTOTANBEI|PIERRE\s*MARCOLINI|MUKASHINA|ICHIKIYUTATESHINA|DAISYOU/i,"餐飲食品"],
-    [/滴滴|交通|地鐵|捷運|公車|巴士|計程|uber|taxi|高鐵|火車|飛機|机票|高速|停车|加油|出行|铁路|12306|航空|哈啰|单车|摩拜|trip\.com|booking|JR\s*EAST(?!\s*SHOP)|HANEDA|NARITA|空港|SUICA|PASMO/i,"運輸交通"],
-    [/娛樂|電影|KTV|遊戲|演唱|旅遊|旅行|酒店|飯店|hotel|airbnb|门票|景区|游乐|万达|猫眼|大麦|claude\.ai|subscri|訂閱/i,"休閒娛樂"],
-    [/服飾|衣|鞋|包|美容|美髮|護膚|化妝|优衣库|zara|h&m|nike|adidas|名创|屈臣氏|UNIQLO|GU\b|ABC.MART|MUJI|無印|GUROBARU|SPORTS/i,"服飾美容"],
-    [/手機|電腦|3C|Apple|小米|华为|通訊|话费|充值|充值缴费|通信|中国移动|中国联通|中国电信|iCloud|腾讯|视频|爱奇艺|bilibili|spotify|netflix|taiwan\s*mobile|BIC\s*CAMERA|YODOBASHI/i,"3C通訊"],
-    [/房租|水費|電費|瓦斯|網路|物業|家電|水电|燃气|暖气|快递|物流|顺丰|中通|菜鸟|拼多多|淘宝|京东|天猫|超市|DAISO|DON\s*QUIJOTE|驚安|百均/i,"居家生活"],
-    [/薪資|薪水|工資|salary|bonus|獎金|工资|奖金|报销/i,"一般收入"],
-    [/醫療|醫院|藥|診所|保健|药店|挂号|体检|口腔|眼科|MATSUMOTO|COCOKARA|KUSURI|FUKUTARO|藥妝|ドラッグ/i,"醫療保健"],
-    [/學費|補習|書|課程|教育|培训|网课|考试/i,"教育學習"],
-    [/MITSUKOSHI|三越|伊勢丹|ISETAN|GINZA\s*SIX|LUMINE|SHOPPING|東急|阪急|TAKASHIMAYA|高島屋|JR\s*EAST\s*SHOP|百貨/i,"購物退費"]
-  ];
-  function guessCat(s) { for(var i=0;i<catMap.length;i++){if(catMap[i][0].test(s))return catMap[i][1];} return "其他"; }
+  function guessCat(s) { return sharedGuessCat(s); }
 
   // ── PASS 1: Build section context (year+month per line) ──
   var sctx = { year: thisYear, month: thisMonth };
