@@ -1336,63 +1336,52 @@ window.importRecords=function(input){
 
 window.openEdit=function(idx){
   const r=filtered[idx];if(!r)return;
-  const newIdx=newRec.findIndex(n=>n.d===r.d&&n.a===r.a&&n.c===r.c&&n.t===r.t&&(n.n||"")===(r.n||""));const isNew=newIdx>=0;
+  var newIdx=newRec.indexOf(r);
+  var baseIdx=newIdx<0?BASE_DATA.indexOf(r):-1;
+  var srcLabel=newIdx>=0?"手動新增":baseIdx>=0?"歷史資料":"記錄";
   const emc=$("edit-modal-content");if(!emc)return;
   const curs=["TWD","CNY","HKD","USD","JPY","KRW","EUR","SGD","AUD","THB","GBP"];
-  // Build full category list (frequency sorted)
   var allCatSet={};allData.forEach(function(x){allCatSet[x.c]=1;});
   var cc=getCustomCats();for(var ck in cc)allCatSet[ck]=1;for(var bk in CATS)allCatSet[bk]=1;
   var catList=filterHidden(sortByFreq(Object.keys(allCatSet), getCatFreq()));
   if(r.c && catList.indexOf(r.c)===-1) catList.push(r.c);
-  // Build subcategory list (frequency sorted)
   var allC=getAllCats();var subs=sortByFreq(allC[r.c]||[], getSubFreq(r.c));
   var subOpts='<option value="">（不指定）</option>'+subs.map(function(x){return"<option"+(x===(r.s||"")?" selected":"")+">"+x+"</option>";}).join("");
   if(r.s && subs.indexOf(r.s)===-1) subOpts+="<option selected>"+r.s+"</option>";
-
-  emc.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:20px'><div><div style='font-size:16px;font-weight:600'>"+(isNew?"編輯記錄":"檢視記錄")+"</div><div style='font-size:11px;color:var(--tx3);margin-top:2px'>"+(isNew?"":"原始資料，可建立更正記錄")+"</div></div><button onclick=\"document.getElementById('edit-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
+  emc.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:20px'><div><div style='font-size:16px;font-weight:600'>編輯記錄</div><div style='font-size:11px;color:var(--tx3);margin-top:2px'>"+srcLabel+"</div></div><button onclick=\"document.getElementById('edit-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
     +"<div class='frow'><div class='fg'><label>日期</label><input type='date' id='ed-date' value='"+fd(r.d)+"'></div><div class='fg'><label>金額</label><input type='number' id='ed-amt' value='"+r.a+"' step='0.01'></div></div>"
     +"<div class='frow'><div class='fg'><label>幣別</label><select id='ed-cur'>"+curs.map(c=>"<option value='"+c+"'"+((r.cur||"TWD")===c?" selected":"")+">"+c+"</option>").join("")+"</select></div><div class='fg'><label>類型</label><select id='ed-type'><option value='e'"+(r.t==="e"?" selected":"")+">支出</option><option value='i'"+(r.t==="i"?" selected":"")+">收入</option><option value='x'"+(r.t==="x"?" selected":"")+">轉帳</option></select></div></div>"
     +"<div class='frow'><div class='fg'><label>類別 <span onclick=\"editModalNewCat()\" style='cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0'>＋新增</span></label><select id='ed-cat' onchange='editModalUpdateSubs()'>"+catList.map(c=>"<option value='"+c+"'"+(r.c===c?" selected":"")+">"+c+"</option>").join("")+"</select></div><div class='fg'><label>子類別 <span onclick=\"editModalNewSub()\" style='cursor:pointer;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0'>＋新增</span></label><select id='ed-sub'>"+subOpts+"</select></div></div>"
     +"<div class='fg' style='margin-bottom:16px'><label>備註</label><input type='text' id='ed-note' value='"+(r.n||r.m||"")+"'></div>"
-    +"<div style='display:flex;gap:8px'><button class='btn' onclick='saveEdit("+newIdx+")'>"+(isNew?"✓ 儲存":"✓ 建立更正")+"</button>"+(isNew?"<button class='btn' style='background:var(--red);color:#fff' onclick='deleteRec("+newIdx+")'>刪除</button>":"")+"<button class='btn btn-ghost' onclick=\"document.getElementById('edit-modal').style.display='none'\">取消</button></div>";
+    +"<div style='display:flex;gap:8px'><button class='btn' onclick='saveEdit("+newIdx+","+baseIdx+")'>✓ 儲存</button><button class='btn' style='background:var(--red);color:#fff' onclick='deleteRec("+newIdx+","+baseIdx+")'>刪除</button><button class='btn btn-ghost' onclick=\"document.getElementById('edit-modal').style.display='none'\">取消</button></div>";
   const em=$("edit-modal");if(em)em.style.display="flex";
 };
-window.editModalUpdateSubs=function(){
-  var cat=(document.getElementById("ed-cat")||{}).value||"";
-  var allC=getAllCats();var subs=sortByFreq(allC[cat]||[], getSubFreq(cat));
-  var sel=document.getElementById("ed-sub");
-  if(sel)sel.innerHTML='<option value="">（不指定）</option>'+subs.map(function(x){return"<option>"+x+"</option>";}).join("");
-};
-window.editModalNewCat=function(){
-  var name=prompt("輸入新類別名稱：");
-  if(!name||!name.trim())return;name=name.trim();
-  var cc=getCustomCats();if(!cc[name])cc[name]=[];saveCustomCats(cc);
-  var sel=document.getElementById("ed-cat");
-  if(sel){var o=document.createElement("option");o.value=name;o.textContent=name;o.selected=true;sel.appendChild(o);}
-  editModalUpdateSubs();toast("✓ 已新增類別："+name,"green");
-};
-window.editModalNewSub=function(){
-  var cat=(document.getElementById("ed-cat")||{}).value||"";
-  if(!cat){toast("請先選擇類別","red");return;}
-  var name=prompt("在「"+cat+"」下新增子類別：");
-  if(!name||!name.trim())return;name=name.trim();
-  var cc=getCustomCats();if(!cc[cat])cc[cat]=[];
-  if(cc[cat].indexOf(name)===-1)cc[cat].push(name);saveCustomCats(cc);
-  var sel=document.getElementById("ed-sub");
-  if(sel){var o=document.createElement("option");o.value=name;o.textContent=name;o.selected=true;sel.appendChild(o);}
-  toast("✓ 已新增子類別："+name,"green");
-};
-window.saveEdit=function(newIdx){
+window.saveEdit=function(newIdx,baseIdx){
   const date=($("ed-date")||{}).value||"",amt=parseFloat(($("ed-amt")||{}).value||""),cur=($("ed-cur")||{}).value||"TWD",type=($("ed-type")||{}).value||"e",cat=($("ed-cat")||{}).value||"",sub=($("ed-sub")||{}).value||"",note=($("ed-note")||{}).value||"";
   if(!date||!amt||!cat){toast("請填寫日期、金額、類別","red");return;}
   const rec={d:date.replace(/-/g,""),a:amt,c:cat,t:type,s:sub,n:note};if(cur!=="TWD")rec.cur=cur;
-  if(newIdx>=0){newRec[newIdx]=rec;toast("✓ 已更新","green");}else{newRec.push(rec);toast("✓ 更正已新增","green");}
-  // Learn merchant → category
+  if(newIdx>=0){ newRec[newIdx]=rec; saveRec(); }
+  else if(baseIdx>=0){ BASE_DATA[baseIdx]=rec; saveBase(); }
+  else { newRec.push(rec); saveRec(); }
   if(note && cat) saveMerchantMapping(note, cat, sub);
-  saveRec();allData=BASE_DATA.concat(newRec);_merchantMap=null;setEl("total-count",allData.length.toLocaleString());
-  const em=$("edit-modal");if(em)em.style.display="none";renderRec();renderNew();
+  allData=BASE_DATA.concat(newRec);_merchantMap=null;setEl("total-count",allData.length.toLocaleString());
+  const em=$("edit-modal");if(em)em.style.display="none";
+  refreshRecKeepPage();renderNew();toast("✓ 已更新","green");
 };
-window.deleteRec=function(newIdx){if(newIdx<0)return;if(!confirm("確定刪除？"))return;newRec.splice(newIdx,1);saveRec();allData=BASE_DATA.concat(newRec);setEl("total-count",allData.length.toLocaleString());const em=$("edit-modal");if(em)em.style.display="none";renderRec();renderNew();toast("已刪除","green");};
+window.deleteRec=function(newIdx,baseIdx){
+  if(!confirm("確定刪除這筆記錄？"))return;
+  if(newIdx>=0){ newRec.splice(newIdx,1); saveRec(); }
+  else if(baseIdx>=0){ BASE_DATA.splice(baseIdx,1); saveBase(); }
+  else { return; }
+  allData=BASE_DATA.concat(newRec);setEl("total-count",allData.length.toLocaleString());
+  const em=$("edit-modal");if(em)em.style.display="none";
+  refreshRecKeepPage();renderNew();toast("已刪除","green");
+};
+function refreshRecKeepPage(){
+  const q=(($("s-q")||{}).value||"").toLowerCase(),tp=($("s-type")||{}).value||"",cat=($("s-cat")||{}).value||"",year=($("s-year")||{}).value||"",month=($("s-month")||{}).value||"";
+  filtered=allData.filter(r=>{if(tp&&r.t!==tp)return false;if(cat&&r.c!==cat)return false;if(year&&yr(r.d)!==year)return false;if(month&&mo(r.d)!==month)return false;if(q){const s=[r.c,r.s||"",r.n||"",r.m||"",r.f||"",r.o||"",r.cur||""].join(" ").toLowerCase();if(!s.includes(q))return false;}return true;}).sort((a,b)=>b.d.localeCompare(a.d));
+  renderList();
+}
 
 window.showCatDrill=function(cat,data){
   const exp=data.filter(r=>r.t==="e"&&r.c===cat),smap={};exp.forEach(r=>{const k=r.s||"（無子分類）";smap[k]=(smap[k]||0)+toTWD(r);});
