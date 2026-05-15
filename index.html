@@ -169,7 +169,8 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
       <div class="page-sub">按年份查看月度收支，點擊月份跳至明細</div>
       <div class="yrsel" id="mth-years"></div>
       <div class="cr1"><div class="cbox"><div class="ctitle" id="mth-ctitle">年度月收支對比</div><div style="position:relative;height:220px"><canvas id="ch-mthd"></canvas></div></div></div>
-      <div class="yrsel" id="mth-months" style="margin-bottom:16px"></div>
+      <div class="yrsel" id="mth-months" style="margin-bottom:8px"></div>
+      <div class="yrsel" id="mth-weeks" style="margin-bottom:16px"></div>
       <div class="cr">
         <div class="cbox"><div class="ctitle" id="mth-cat-title">年度支出分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-cat"></canvas></div></div>
         <div class="cbox"><div class="ctitle" id="mth-inc-title">年度收入分類</div><div style="position:relative;height:220px"><canvas id="ch-mth-inc"></canvas></div></div>
@@ -317,7 +318,7 @@ textarea:focus{border-color:rgba(240,192,96,.4)}
 </div>
 <div class="toast" id="toast" style="opacity:0;pointer-events:none"></div>
 <div id="drill-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
-  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.5)"><div id="drill-content"></div></div>
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.5)"><div id="drill-content"></div></div>
 </div>
 <div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.5)"><div id="edit-modal-content"></div></div>
@@ -336,7 +337,7 @@ let FX={CNY:{"201807":4.52,"201901":4.38,"201902":4.37,"201903":4.42,"201904":4.
 
 let BASE_DATA=[];
 let uploadedImages=[]; // loaded from localStorage
-let newRec=[],allData=[],filtered=[],recPage=1,recPerPage=50,ovY="all",mthY=String(new Date().getFullYear()),mthM="all",ch={};
+let newRec=[],allData=[],filtered=[],recPage=1,recPerPage=50,ovY="all",mthY=String(new Date().getFullYear()),mthM="all",mthW="all",ch={};
 
 // ── Merchant → Category auto-learning ──
 var _merchantMap = null; // cached
@@ -664,10 +665,10 @@ function renderMth(){
   const mmEl=$("mth-months");
   if(mmEl){
     mmEl.innerHTML="";
-    mkYrBtn("全年","all",mthM==="all",mmEl,function(v){mthM=v;renderMthPies();});
+    mkYrBtn("全年","all",mthM==="all",mmEl,function(v){mthM=v;mthW="all";renderMthPies();});
     mks.forEach(function(m,i){
       // Only show months that have data
-      if(md[m].e>0||md[m].i>0) mkYrBtn((i+1)+"月",m,mthM===m,mmEl,function(v){mthM=v;renderMthPies();});
+      if(md[m].e>0||md[m].i>0) mkYrBtn((i+1)+"月",m,mthM===m,mmEl,function(v){mthM=v;mthW="all";renderMthPies();});
     });
   }
 
@@ -685,18 +686,69 @@ function renderMthPies(){
     data=data.filter(r=>mo(r.d)===mthM);
     label=mthY+" 年 "+parseInt(mthM)+" 月";
   }
+
+  // Build week selector (only when a specific month is selected)
+  var wkEl=$("mth-weeks");
+  if(wkEl){
+    wkEl.innerHTML="";
+    if(mthM!=="all"){
+      var y=parseInt(mthY),m=parseInt(mthM);
+      var weeks=computeWeeks(y,m);
+      mkYrBtn("全月","all",mthW==="all",wkEl,function(v){mthW=v;renderMthPies();});
+      weeks.forEach(function(w,i){
+        var lbl="W"+(i+1)+" ("+w.startD+"-"+w.endD+"日)";
+        mkYrBtn(lbl,String(i),mthW===String(i),wkEl,function(v){mthW=v;renderMthPies();});
+      });
+      // Filter by week
+      if(mthW!=="all"){
+        var wi=parseInt(mthW);
+        if(weeks[wi]){
+          var ws=weeks[wi].startFull,we=weeks[wi].endFull;
+          data=data.filter(r=>r.d>=ws&&r.d<=we);
+          label+=" W"+(wi+1);
+        }
+      }
+    } else { mthW="all"; }
+  }
+
   setEl("mth-cat-title",label+" 支出分類");
   setEl("mth-inc-title",label+" 收入分類");
 
-  // Expense category pie
+  // Expense category pie (clickable)
   const mthExp=data.filter(r=>r.t==="e"),mthCmap={};mthExp.forEach(r=>{mthCmap[r.c]=(mthCmap[r.c]||0)+toTWD(r);});
   const mthCtop=Object.entries(mthCmap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  dc("mthcat");if($("ch-mth-cat"))ch["mthcat"]=new Chart($("ch-mth-cat"),{type:"doughnut",data:{labels:mthCtop.map(([k])=>k),datasets:[{data:mthCtop.map(([,v])=>Math.round(v)),backgroundColor:mthCtop.map(([k])=>CC[k]||"#64748b"),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()}}}}});
+  dc("mthcat");if($("ch-mth-cat"))ch["mthcat"]=new Chart($("ch-mth-cat"),{type:"doughnut",data:{labels:mthCtop.map(([k])=>k),datasets:[{data:mthCtop.map(([,v])=>Math.round(v)),backgroundColor:mthCtop.map(([k])=>CC[k]||"#64748b"),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",onClick:(e,els)=>{if(els.length)showCatDrill(mthCtop[els[0].index][0],data,label);},plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10},onClick:(e,item)=>showCatDrill(item.text,data,label)},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()+" (點擊細項)"}}}}});
 
   // Income category pie
   const mthInc=data.filter(r=>r.t==="i"),mthImap={};mthInc.forEach(r=>{mthImap[r.c]=(mthImap[r.c]||0)+toTWD(r);});
   const mthItop=Object.entries(mthImap).sort((a,b)=>b[1]-a[1]);
   dc("mthinc");if($("ch-mth-inc"))ch["mthinc"]=new Chart($("ch-mth-inc"),{type:"doughnut",data:{labels:mthItop.map(([k])=>k),datasets:[{data:mthItop.map(([,v])=>Math.round(v)),backgroundColor:["#34d399","#4ecdc4","#86efac","#a7f3d0","#6ee7b7","#fcd34d"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{position:"right",labels:{color:"#8892a4",font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.label+": NT$"+c.raw.toLocaleString()}}}}});
+}
+
+// Compute weeks (Mon-Sun) for a given year/month
+function computeWeeks(y,m){
+  var weeks=[];
+  var firstDay=new Date(y,m-1,1);
+  var lastDay=new Date(y,m,0).getDate();
+  // Find first Monday on or before the 1st
+  var d=1;
+  // Start from day 1, find which week it belongs to
+  while(d<=lastDay){
+    var dt=new Date(y,m-1,d);
+    var dow=dt.getDay(); // 0=Sun
+    // Find the Monday of this week
+    var monOffset=(dow===0)?-6:1-dow;
+    var monDay=d+monOffset;
+    var sunDay=monDay+6;
+    // Clamp to month boundaries
+    var startD=Math.max(1,monDay);
+    var endD=Math.min(lastDay,sunDay);
+    var startFull=y+String(m).padStart(2,"0")+String(startD).padStart(2,"0");
+    var endFull=y+String(m).padStart(2,"0")+String(endD).padStart(2,"0");
+    weeks.push({startD:startD,endD:endD,startFull:startFull,endFull:endFull});
+    d=endD+1;
+  }
+  return weeks;
 }
 
 function drillM(y,m){const sy=$("s-year"),sm=$("s-month"),st=$("s-type"),sc=$("s-cat"),sq=$("s-q");if(sy)sy.value=y;if(sm)sm.value=m;if(st)st.value="e";if(sc)sc.value="";if(sq)sq.value="";showPage("records");}
@@ -1398,15 +1450,61 @@ function refreshRecKeepPage(){
   renderList();
 }
 
-window.showCatDrill=function(cat,data){
-  const exp=data.filter(r=>r.t==="e"&&r.c===cat),smap={};exp.forEach(r=>{const k=r.s||"（無子分類）";smap[k]=(smap[k]||0)+toTWD(r);});
-  const sorted=Object.entries(smap).sort((a,b)=>b[1]-a[1]),total=sorted.reduce((s,[,v])=>s+v,0),maxV=sorted[0]?sorted[0][1]:1,col=CC[cat]||"#64748b";
-  const dc2=$("drill-content");if(!dc2)return;
-  dc2.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:18px'><div><div style='font-size:17px;font-weight:600'>"+cat+"</div><div style='font-size:12px;color:var(--tx3);margin-top:3px'>共 "+exp.length+" 筆 · 合計 NT$ "+Math.round(total).toLocaleString()+"</div></div><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>"
-    +sorted.map(([sub,val])=>{const pct=Math.round(val/maxV*100),ratio=Math.round(val/total*100);return "<div style='margin-bottom:14px;cursor:pointer' onclick='drillToRecords(\""+cat+"\",\""+sub+"\")'><div style='display:flex;justify-content:space-between;margin-bottom:5px'><span style='font-size:13px'>"+sub+"</span><span style='font-size:12px;font-family:DM Mono,monospace;color:var(--tx2)'>NT$ "+Math.round(val).toLocaleString()+" <span style='color:var(--tx3)'>"+ratio+"%</span></span></div><div style='height:6px;background:var(--s3);border-radius:3px;overflow:hidden'><div style='width:"+pct+"%;height:100%;background:"+col+";border-radius:3px'></div></div></div>";}).join("")
-    +"<div style='margin-top:18px;padding-top:14px;border-top:1px solid var(--bd);font-size:12px;color:var(--tx3)'>點擊子分類跳至明細記錄</div>";
-  const dm=$("drill-modal");if(dm)dm.style.display="flex";
+window.showCatDrill=function(cat,data,label){
+  var exp=data.filter(r=>r.t==="e"&&r.c===cat),smap={};exp.forEach(r=>{var k=r.s||"（無子分類）";smap[k]=(smap[k]||0)+toTWD(r);});
+  var sorted=Object.entries(smap).sort((a,b)=>b[1]-a[1]),total=sorted.reduce((s,[,v])=>s+v,0),maxV=sorted[0]?sorted[0][1]:1,col=CC[cat]||"#64748b";
+  var subColors=["#f0c060","#4ecdc4","#a78bfa","#f9a8d4","#fb923c","#86efac","#38bdf8","#facc15","#e879f9","#6ee7b7","#f87171","#64748b"];
+  var dc2=$("drill-content");if(!dc2)return;
+  var titleStr=cat+(label?" · "+label:"");
+
+  var html="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px'><div><div style='font-size:17px;font-weight:600'>"+titleStr+"</div><div style='font-size:12px;color:var(--tx3);margin-top:3px'>共 "+exp.length+" 筆 · 合計 NT$ "+Math.round(total).toLocaleString()+"</div></div><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div>";
+
+  // Subcategory pie chart
+  if(sorted.length>1){
+    html+="<div style='position:relative;height:200px;margin-bottom:16px'><canvas id='ch-drill-sub'></canvas></div>";
+  }
+
+  // Bar list
+  html+=sorted.map(function([sub,val],i){
+    var pct=Math.round(val/maxV*100),ratio=Math.round(val/total*100);
+    var sc=subColors[i%subColors.length];
+    return "<div style='margin-bottom:12px;cursor:pointer' onclick='showSubDrill(\""+cat.replace(/"/g,"\\&quot;")+"\",\""+sub.replace(/"/g,"\\&quot;")+"\","+JSON.stringify(data===getByY(ovY)?"ov":"mth")+")'><div style='display:flex;justify-content:space-between;margin-bottom:4px'><span style='font-size:13px'><span style='display:inline-block;width:8px;height:8px;border-radius:50%;background:"+sc+";margin-right:5px'></span>"+sub+"</span><span style='font-size:12px;font-family:DM Mono,monospace;color:var(--tx2)'>NT$ "+Math.round(val).toLocaleString()+" <span style='color:var(--tx3)'>"+ratio+"%</span></span></div><div style='height:5px;background:var(--s3);border-radius:3px;overflow:hidden'><div style='width:"+pct+"%;height:100%;background:"+sc+";border-radius:3px'></div></div></div>";
+  }).join("");
+  html+="<div style='font-size:11px;color:var(--tx3);margin-top:8px'>點擊子分類查看明細</div>";
+  dc2.innerHTML=html;
+
+  // Render pie chart
+  if(sorted.length>1){
+    dc("drillsub");
+    ch["drillsub"]=new Chart($("ch-drill-sub"),{type:"doughnut",data:{
+      labels:sorted.map(([k])=>k),
+      datasets:[{data:sorted.map(([,v])=>Math.round(v)),backgroundColor:sorted.map((_,i)=>subColors[i%subColors.length]),borderWidth:0,hoverOffset:3}]
+    },options:{responsive:true,maintainAspectRatio:false,cutout:"58%",
+      onClick:function(e,els){if(els.length){var sub=sorted[els[0].index][0];showSubDrill(cat,sub,"ov");}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.label+": NT$"+c.raw.toLocaleString();}}}}}});
+  }
+  var dm=$("drill-modal");if(dm)dm.style.display="flex";
 };
+
+// Show transactions for a specific subcategory
+window.showSubDrill=function(cat,sub,src){
+  var data=src==="mth"?allData.filter(r=>yr(r.d)===mthY&&(mthM==="all"||mo(r.d)===mthM)):getByY(ovY);
+  var recs=data.filter(r=>r.t==="e"&&r.c===cat&&(r.s||"（無子分類）")===sub).sort((a,b)=>b.d.localeCompare(a.d));
+  var total=recs.reduce((s,r)=>s+toTWD(r),0);
+  var dc2=$("drill-content");if(!dc2)return;
+  var html="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px'><div><div style='font-size:17px;font-weight:600'>"+cat+" · "+sub+"</div><div style='font-size:12px;color:var(--tx3);margin-top:3px'>共 "+recs.length+" 筆 · NT$ "+Math.round(total).toLocaleString()+"</div></div><div style='display:flex;gap:6px'><button onclick='showCatDrill(\""+cat.replace(/"/g,"\\&quot;")+"\","+JSON.stringify(src==="mth"?"mthData":"ovData")+")' style='background:var(--s3);border:none;color:var(--tx2);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px'>← 返回</button><button onclick=\"document.getElementById('drill-modal').style.display='none'\" style='background:var(--s3);border:none;color:var(--tx2);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px'>×</button></div></div>";
+  html+=recs.slice(0,30).map(function(r){
+    var isFX=r.cur&&r.cur!=="TWD";
+    return "<div style='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)'><div><div style='font-size:12px;color:var(--tx2);font-family:DM Mono,monospace'>"+fd(r.d)+"</div><div style='font-size:12px;color:var(--tx3);margin-top:2px'>"+(r.n||r.m||"")+"</div></div><div style='text-align:right;font-size:13px;color:var(--red)'>-"+(isFX?r.a+" "+r.cur+"<div style='font-size:10px;color:var(--tx3)'>≈ NT$"+Math.round(toTWD(r)).toLocaleString()+"</div>":"NT$ "+r.a.toLocaleString())+"</div></div>";
+  }).join("");
+  if(recs.length>30) html+="<div style='text-align:center;padding:10px;color:var(--tx3);font-size:12px'>...還有 "+(recs.length-30)+" 筆</div>";
+  html+="<div style='margin-top:14px'><button onclick='drillToRecords(\""+cat+"\",\""+sub+"\")' class='btn btn-ghost' style='width:100%;font-size:12px'>在明細記錄查看全部 →</button></div>";
+  dc2.innerHTML=html;
+};
+// Fix back button data reference
+window._drillBackData=null;
+var _origShowCatDrill=window.showCatDrill;
+
 window.drillToRecords=function(cat,sub){const dm=$("drill-modal");if(dm)dm.style.display="none";const sc=$("s-cat");if(sc)sc.value=cat;const sq=$("s-q");if(sq)sq.value=sub==="（無子分類）"?"":sub;const st=$("s-type");if(st)st.value="e";const sy=$("s-year");if(sy)sy.value="";const sm=$("s-month");if(sm)sm.value="";showPage("records");};
 
 function renderFX(){
